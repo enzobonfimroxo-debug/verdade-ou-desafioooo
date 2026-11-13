@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Verdade ou Desafio — Game Show Multiplayer</title>
+  <title>Verdade ou Desafio — Multiplayer Online</title>
+
+  <!-- Firebase SDK (App + Realtime Database) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
   <style>
     :root {
       --bg-dark: #0d071e;
-      --bg-card: rgba(25, 16, 54, 0.88);
+      --bg-card: rgba(25, 16, 54, 0.9);
       --bg-glass: rgba(255, 255, 255, 0.06);
       --border-glass: rgba(255, 255, 255, 0.14);
       --neon-pink: #ff2e93;
@@ -46,7 +51,6 @@
       padding-bottom: 40px;
     }
 
-    /* Animated spotlight background lines */
     .stage-lights {
       position: fixed;
       inset: 0;
@@ -59,7 +63,7 @@
       mask-image: radial-gradient(circle at center, black 35%, transparent 85%);
     }
 
-    /* Top Simulator / Status Bar */
+    /* Top Bar */
     .topbar {
       width: 100%;
       max-width: 1040px;
@@ -95,7 +99,7 @@
     .topbar-controls {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
@@ -104,7 +108,7 @@
       border: 1px solid var(--border-glass);
       padding: 6px 14px;
       border-radius: 999px;
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       color: var(--text-muted);
       display: flex;
       align-items: center;
@@ -112,9 +116,15 @@
       backdrop-filter: blur(10px);
     }
 
-    .pill-info strong {
-      color: var(--neon-cyan);
+    .pill-info strong { color: var(--neon-cyan); }
+
+    .conn-pill {
+      cursor: pointer;
+      transition: 0.2s;
     }
+    .conn-pill.online { border-color: rgba(6, 214, 160, 0.5); color: #8ff7d7; }
+    .conn-pill.local { border-color: rgba(255, 209, 102, 0.5); color: var(--neon-gold); }
+    .conn-pill:hover { transform: translateY(-1px); background: rgba(255,255,255,0.1); }
 
     .icon-btn {
       background: var(--bg-glass);
@@ -123,78 +133,16 @@
       padding: 7px 12px;
       border-radius: 999px;
       cursor: pointer;
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       transition: 0.2s;
     }
-
-    .icon-btn:hover {
-      border-color: var(--neon-cyan);
-      background: rgba(0, 240, 255, 0.12);
-    }
-
-    /* POV Switcher Bar (for testing multiple players in 1 screen) */
-    .pov-bar {
-      width: calc(100% - 28px);
-      max-width: 1000px;
-      margin: 8px auto 0;
-      padding: 10px 14px;
-      background: rgba(16, 10, 38, 0.9);
-      border: 1px dashed rgba(0, 240, 255, 0.4);
-      border-radius: 14px;
-      display: none;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
-      z-index: 10;
-      backdrop-filter: blur(8px);
-    }
-
-    .pov-bar.visible {
-      display: flex;
-    }
-
-    .pov-label {
-      font-size: 0.8rem;
-      color: var(--neon-cyan);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-    }
-
-    .pov-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .pov-chip {
-      border: 1px solid var(--border-glass);
-      background: var(--bg-glass);
-      color: var(--text-muted);
-      padding: 5px 11px;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      cursor: pointer;
-      transition: 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .pov-chip.active {
-      background: linear-gradient(135deg, rgba(0, 240, 255, 0.25), rgba(157, 78, 221, 0.35));
-      border-color: var(--neon-cyan);
-      color: #fff;
-      font-weight: 700;
-      box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
-    }
+    .icon-btn:hover { border-color: var(--neon-cyan); background: rgba(0, 240, 255, 0.12); }
 
     /* Main Container */
     .app-container {
       width: calc(100% - 28px);
       max-width: 920px;
-      margin: 18px auto 0;
+      margin: 16px auto 0;
       position: relative;
       z-index: 5;
     }
@@ -203,10 +151,7 @@
       display: none;
       animation: fadeSlideUp 0.35s ease forwards;
     }
-
-    .screen.active {
-      display: block;
-    }
+    .screen.active { display: block; }
 
     @keyframes fadeSlideUp {
       from { opacity: 0; transform: translateY(14px) scale(0.985); }
@@ -232,7 +177,6 @@
       background: linear-gradient(90deg, var(--neon-pink), var(--neon-cyan), var(--neon-gold));
     }
 
-    /* Typography */
     .show-title {
       font-size: clamp(2rem, 5vw, 3.1rem);
       font-weight: 900;
@@ -251,7 +195,7 @@
       text-align: center;
       color: var(--text-muted);
       font-size: 1rem;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
 
     h2.section-title {
@@ -263,14 +207,11 @@
       gap: 10px;
     }
 
-    /* Forms & Inputs */
-    .form-group {
-      margin-bottom: 18px;
-    }
+    .form-group { margin-bottom: 18px; }
 
     label {
       display: block;
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.8px;
@@ -280,9 +221,8 @@
 
     input[type="text"],
     input[type="password"],
-    input[type="number"],
-    textarea,
-    select {
+    input[type="url"],
+    textarea {
       width: 100%;
       background: rgba(10, 6, 26, 0.78);
       border: 1.5px solid var(--border-glass);
@@ -294,15 +234,12 @@
       outline: none;
     }
 
-    input:focus, textarea:focus, select:focus {
+    input:focus, textarea:focus {
       border-color: var(--neon-cyan);
       box-shadow: 0 0 0 4px rgba(0, 240, 255, 0.14);
     }
 
-    textarea {
-      resize: vertical;
-      min-height: 95px;
-    }
+    textarea { resize: vertical; min-height: 95px; }
 
     /* Buttons */
     .btn {
@@ -313,7 +250,7 @@
       padding: 14px 24px;
       border-radius: 14px;
       border: none;
-      font-size: 1rem;
+      font-size: 0.98rem;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.6px;
@@ -321,7 +258,6 @@
       transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
       color: #fff;
     }
-
     .btn:active { transform: scale(0.97); }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
@@ -329,29 +265,20 @@
       background: linear-gradient(135deg, var(--neon-pink), #b5179e);
       box-shadow: var(--shadow-pink);
     }
-    .btn-primary:hover:not(:disabled) {
-      box-shadow: 0 0 30px rgba(255, 46, 147, 0.7);
-      transform: translateY(-2px);
-    }
+    .btn-primary:hover:not(:disabled) { box-shadow: 0 0 30px rgba(255, 46, 147, 0.7); transform: translateY(-2px); }
 
     .btn-cyan {
       background: linear-gradient(135deg, #00b4d8, #0077b6);
       box-shadow: var(--shadow-cyan);
     }
-    .btn-cyan:hover:not(:disabled) {
-      box-shadow: 0 0 30px rgba(0, 240, 255, 0.65);
-      transform: translateY(-2px);
-    }
+    .btn-cyan:hover:not(:disabled) { box-shadow: 0 0 30px rgba(0, 240, 255, 0.65); transform: translateY(-2px); }
 
     .btn-gold {
       background: linear-gradient(135deg, #ffb703, #fb8500);
       color: #160c28;
       box-shadow: var(--shadow-gold);
     }
-    .btn-gold:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 0 30px rgba(255, 209, 102, 0.7);
-    }
+    .btn-gold:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 0 30px rgba(255, 209, 102, 0.7); }
 
     .btn-green {
       background: linear-gradient(135deg, #06d6a0, #059669);
@@ -364,10 +291,7 @@
       border: 1.5px solid var(--border-glass);
       color: var(--text-main);
     }
-    .btn-ghost:hover:not(:disabled) {
-      border-color: var(--neon-cyan);
-      background: rgba(255,255,255,0.1);
-    }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--neon-cyan); background: rgba(255,255,255,0.1); }
 
     .btn-danger {
       background: rgba(255, 77, 109, 0.16);
@@ -376,12 +300,7 @@
     }
 
     .btn-block { width: 100%; }
-
-    .btn-row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
+    .btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
     .btn-row > .btn { flex: 1; min-width: 160px; }
 
     /* Menu Cards */
@@ -405,49 +324,24 @@
       align-items: center;
       gap: 10px;
     }
-
     .menu-option:hover {
       transform: translateY(-4px);
       border-color: var(--neon-cyan);
       background: rgba(0, 240, 255, 0.08);
       box-shadow: 0 12px 30px rgba(0, 240, 255, 0.18);
     }
-
     .menu-option.pink:hover {
       border-color: var(--neon-pink);
       background: rgba(255, 46, 147, 0.08);
       box-shadow: 0 12px 30px rgba(255, 46, 147, 0.2);
     }
-
-    .menu-icon {
-      font-size: 2.5rem;
-    }
-
-    .menu-option h3 {
-      font-size: 1.2rem;
-      font-weight: 800;
-    }
-
-    .menu-option p {
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
+    .menu-icon { font-size: 2.5rem; }
+    .menu-option h3 { font-size: 1.2rem; font-weight: 800; }
+    .menu-option p { font-size: 0.88rem; color: var(--text-muted); line-height: 1.4; }
 
     /* Range Slider */
-    .range-wrap {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    input[type="range"] {
-      flex: 1;
-      accent-color: var(--neon-pink);
-      height: 8px;
-      cursor: pointer;
-    }
-
+    .range-wrap { display: flex; align-items: center; gap: 16px; }
+    input[type="range"] { flex: 1; accent-color: var(--neon-pink); height: 8px; cursor: pointer; }
     .range-badge {
       min-width: 68px;
       text-align: center;
@@ -471,7 +365,6 @@
       gap: 14px;
       margin-bottom: 22px;
     }
-
     .room-code-digits {
       font-size: 2.4rem;
       font-weight: 900;
@@ -494,14 +387,9 @@
       padding: 12px 14px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 10px;
     }
-
-    .player-tile.is-me {
-      border-color: var(--neon-cyan);
-      background: rgba(0, 240, 255, 0.08);
-    }
+    .player-tile.is-me { border-color: var(--neon-cyan); background: rgba(0, 240, 255, 0.08); }
 
     .player-avatar {
       width: 38px;
@@ -515,27 +403,11 @@
       color: #fff;
       flex-shrink: 0;
     }
+    .player-meta { flex: 1; min-width: 0; }
+    .player-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .player-tag { font-size: 0.72rem; color: var(--neon-gold); font-weight: 700; text-transform: uppercase; }
 
-    .player-meta {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .player-name {
-      font-weight: 700;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .player-tag {
-      font-size: 0.72rem;
-      color: var(--neon-gold);
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    /* Game Stage & Spinner */
+    /* Arena / Bottle */
     .game-header {
       display: flex;
       flex-wrap: wrap;
@@ -544,7 +416,6 @@
       gap: 12px;
       margin-bottom: 18px;
     }
-
     .round-badge {
       background: rgba(255, 209, 102, 0.15);
       border: 1px solid rgba(255, 209, 102, 0.5);
@@ -553,10 +424,8 @@
       border-radius: 999px;
       font-weight: 800;
       font-size: 0.88rem;
-      letter-spacing: 0.5px;
     }
 
-    /* Circular Roulette / Bottle Stage */
     .arena-wrapper {
       position: relative;
       width: 100%;
@@ -567,7 +436,6 @@
       align-items: center;
       justify-content: center;
     }
-
     .arena-ring {
       position: absolute;
       inset: 14%;
@@ -575,7 +443,6 @@
       border: 3px dashed rgba(255, 255, 255, 0.16);
       box-shadow: inset 0 0 40px rgba(157, 78, 221, 0.25), 0 0 40px rgba(0, 240, 255, 0.12);
     }
-
     .arena-center-glow {
       position: absolute;
       width: 34%;
@@ -595,7 +462,6 @@
       z-index: 4;
       transition: transform 0.3s;
     }
-
     .seat-avatar {
       width: 50px;
       height: 50px;
@@ -609,7 +475,6 @@
       box-shadow: 0 6px 18px rgba(0,0,0,0.5);
       transition: 0.3s;
     }
-
     .seat-name {
       font-size: 0.78rem;
       font-weight: 700;
@@ -622,39 +487,26 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
     .seat-node.role-asker .seat-avatar {
       border-color: var(--neon-cyan);
       box-shadow: 0 0 24px var(--neon-cyan);
       transform: scale(1.16);
     }
-
     .seat-node.role-responder .seat-avatar {
       border-color: var(--neon-pink);
       box-shadow: 0 0 24px var(--neon-pink);
       transform: scale(1.16);
     }
-
     .seat-role-pill {
       font-size: 0.65rem;
       font-weight: 900;
       text-transform: uppercase;
       padding: 2px 7px;
       border-radius: 999px;
-      letter-spacing: 0.4px;
     }
+    .seat-node.role-asker .seat-role-pill { background: var(--neon-cyan); color: #051923; }
+    .seat-node.role-responder .seat-role-pill { background: var(--neon-pink); color: #fff; }
 
-    .seat-node.role-asker .seat-role-pill {
-      background: var(--neon-cyan);
-      color: #051923;
-    }
-
-    .seat-node.role-responder .seat-role-pill {
-      background: var(--neon-pink);
-      color: #fff;
-    }
-
-    /* Spinning Bottle SVG */
     .bottle-pivot {
       position: relative;
       width: 140px;
@@ -665,7 +517,6 @@
       justify-content: center;
       transition: transform 3.2s cubic-bezier(0.14, 0.85, 0.22, 1);
     }
-
     .bottle-svg {
       width: 120px;
       height: 120px;
@@ -685,56 +536,22 @@
       margin-bottom: 20px;
       text-align: center;
     }
-
-    .role-box {
-      padding: 10px;
-      border-radius: 14px;
-    }
-
-    .role-box.asker {
-      background: rgba(0, 240, 255, 0.08);
-      border: 1px solid rgba(0, 240, 255, 0.35);
-    }
-
-    .role-box.responder {
-      background: rgba(255, 46, 147, 0.08);
-      border: 1px solid rgba(255, 46, 147, 0.35);
-    }
-
-    .role-box small {
-      display: block;
-      font-size: 0.72rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
-    }
-
+    .role-box { padding: 10px; border-radius: 14px; }
+    .role-box.asker { background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.35); }
+    .role-box.responder { background: rgba(255, 46, 147, 0.08); border: 1px solid rgba(255, 46, 147, 0.35); }
+    .role-box small { display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
     .role-box.asker small { color: var(--neon-cyan); }
     .role-box.responder small { color: var(--neon-pink); }
+    .role-box strong { font-size: 1.15rem; display: block; }
+    .vs-badge { font-weight: 900; font-size: 1.1rem; color: var(--neon-gold); background: rgba(255, 209, 102, 0.14); padding: 8px 12px; border-radius: 50%; }
 
-    .role-box strong {
-      font-size: 1.15rem;
-      display: block;
-    }
-
-    .vs-badge {
-      font-weight: 900;
-      font-size: 1.1rem;
-      color: var(--neon-gold);
-      background: rgba(255, 209, 102, 0.14);
-      padding: 8px 12px;
-      border-radius: 50%;
-    }
-
-    /* Choice Cards (Truth / Dare & Open / Closed Door) */
+    /* Choice Cards */
     .choice-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 14px;
       margin-bottom: 18px;
     }
-
     .choice-btn {
       background: var(--bg-glass);
       border: 2px solid var(--border-glass);
@@ -749,38 +566,15 @@
       align-items: center;
       gap: 6px;
     }
-
     .choice-btn .big-emoji { font-size: 2rem; }
     .choice-btn strong { font-size: 1.1rem; }
     .choice-btn span { font-size: 0.8rem; color: var(--text-muted); }
-
     .choice-btn:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.4); }
+    .choice-btn.selected-truth { border-color: var(--neon-cyan); background: rgba(0, 240, 255, 0.15); box-shadow: var(--shadow-cyan); }
+    .choice-btn.selected-dare { border-color: var(--neon-pink); background: rgba(255, 46, 147, 0.15); box-shadow: var(--shadow-pink); }
+    .choice-btn.selected-open { border-color: var(--neon-green); background: rgba(6, 214, 160, 0.15); box-shadow: 0 0 20px rgba(6, 214, 160, 0.35); }
+    .choice-btn.selected-closed { border-color: var(--neon-gold); background: rgba(255, 209, 102, 0.15); box-shadow: var(--shadow-gold); }
 
-    .choice-btn.selected-truth {
-      border-color: var(--neon-cyan);
-      background: rgba(0, 240, 255, 0.15);
-      box-shadow: var(--shadow-cyan);
-    }
-
-    .choice-btn.selected-dare {
-      border-color: var(--neon-pink);
-      background: rgba(255, 46, 147, 0.15);
-      box-shadow: var(--shadow-pink);
-    }
-
-    .choice-btn.selected-open {
-      border-color: var(--neon-green);
-      background: rgba(6, 214, 160, 0.15);
-      box-shadow: 0 0 20px rgba(6, 214, 160, 0.35);
-    }
-
-    .choice-btn.selected-closed {
-      border-color: var(--neon-gold);
-      background: rgba(255, 209, 102, 0.15);
-      box-shadow: var(--shadow-gold);
-    }
-
-    /* Status / Waiting Box */
     .status-panel {
       background: rgba(10, 6, 26, 0.72);
       border: 1.5px solid var(--border-glass);
@@ -789,21 +583,10 @@
       text-align: center;
     }
 
-    .pulse-dots {
-      display: inline-flex;
-      gap: 6px;
-      margin-left: 6px;
-    }
-    .pulse-dots span {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--neon-cyan);
-      animation: bounce 1.2s infinite ease-in-out;
-    }
+    .pulse-dots { display: inline-flex; gap: 6px; margin-left: 6px; }
+    .pulse-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--neon-cyan); animation: bounce 1.2s infinite ease-in-out; }
     .pulse-dots span:nth-child(2) { animation-delay: 0.2s; }
     .pulse-dots span:nth-child(3) { animation-delay: 0.4s; }
-
     @keyframes bounce {
       0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
       40% { transform: scale(1.1); opacity: 1; }
@@ -817,48 +600,20 @@
       margin: 16px 0;
       text-align: center;
     }
-
     .prompt-reveal-box.secret {
       background: linear-gradient(135deg, rgba(255, 209, 102, 0.14), rgba(16, 10, 38, 0.9));
       border-color: var(--neon-gold);
     }
+    .prompt-text { font-size: 1.35rem; font-weight: 800; line-height: 1.4; margin: 10px 0; }
 
-    .prompt-text {
-      font-size: 1.35rem;
-      font-weight: 800;
-      line-height: 1.4;
-      margin: 10px 0;
-    }
-
-    .tag-row {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
-    }
-
-    .badge {
-      padding: 5px 12px;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
+    .tag-row { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .badge { padding: 5px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
     .badge-truth { background: rgba(0, 240, 255, 0.2); color: var(--neon-cyan); border: 1px solid var(--neon-cyan); }
     .badge-dare { background: rgba(255, 46, 147, 0.2); color: var(--neon-pink); border: 1px solid var(--neon-pink); }
     .badge-open { background: rgba(6, 214, 160, 0.2); color: var(--neon-green); border: 1px solid var(--neon-green); }
     .badge-closed { background: rgba(255, 209, 102, 0.2); color: var(--neon-gold); border: 1px solid var(--neon-gold); }
 
-    .quick-suggestions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-
+    .quick-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
     .suggestion-pill {
       font-size: 0.78rem;
       background: var(--bg-glass);
@@ -869,10 +624,39 @@
       cursor: pointer;
       transition: 0.2s;
     }
+    .suggestion-pill:hover { border-color: var(--neon-cyan); color: #fff; }
 
-    .suggestion-pill:hover {
-      border-color: var(--neon-cyan);
-      color: #fff;
+    /* Modal de Configuração Firebase */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 2, 16, 0.82);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 90;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-box {
+      width: 100%;
+      max-width: 560px;
+      background: #170f33;
+      border: 1.5px solid var(--neon-cyan);
+      border-radius: 20px;
+      padding: 26px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
+    }
+    .steps-box {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin-bottom: 16px;
     }
 
     .toast {
@@ -891,35 +675,9 @@
       z-index: 100;
       transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2);
       pointer-events: none;
+      text-align: center;
     }
-
-    .toast.show {
-      transform: translateX(-50%) translateY(0);
-    }
-
-    .room-list-mini {
-      margin-top: 18px;
-      border-top: 1px solid var(--border-glass);
-      padding-top: 16px;
-    }
-
-    .room-mini-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--bg-glass);
-      border: 1px solid var(--border-glass);
-      padding: 10px 14px;
-      border-radius: 12px;
-      margin-top: 8px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    .room-mini-item:hover {
-      border-color: var(--neon-cyan);
-      background: rgba(0, 240, 255, 0.08);
-    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
 
     @media (max-width: 600px) {
       .card { padding: 20px 16px; }
@@ -939,21 +697,19 @@
   <header class="topbar">
     <div class="brand-mini">
       <span>🎯 Verdade ou Desafio</span>
-      <span class="brand-badge">LIVE SHOW</span>
+      <span class="brand-badge">MULTIPLAYER</span>
     </div>
     <div class="topbar-controls">
+      <button class="pill-info conn-pill local" id="connStatusPill" title="Configurar Banco de Dados Online (Firebase)">
+        <span id="connDot">🟡</span>
+        <span id="connLabel">Configurar Online</span>
+      </button>
       <div class="pill-info" id="userBadge" style="display:none;">
         👤 <strong id="topNickDisplay"></strong>
       </div>
-      <button class="icon-btn" id="soundToggleBtn" title="Ativar/Desativar Som">🔊 Som: ON</button>
+      <button class="icon-btn" id="soundToggleBtn" title="Ativar/Desativar Som">🔊 Som</button>
     </div>
   </header>
-
-  <!-- POV Switcher (Simulates multiple screens seamlessly in 1 browser tab) -->
-  <div class="pov-bar" id="povBar">
-    <span class="pov-label">👁️ Simulador de Tela (POV):</span>
-    <div class="pov-buttons" id="povButtons"></div>
-  </div>
 
   <main class="app-container">
 
@@ -961,7 +717,11 @@
     <section class="screen active" id="screen-nick">
       <div class="card">
         <h1 class="show-title">Verdade ou Desafio</h1>
-        <p class="subtitle">O clássico jogo de festa com roleta ao vivo, perguntas secretas e rodadas infinitas!</p>
+        <p class="subtitle">Jogue online em tempo real com amigos em celulares e computadores diferentes!</p>
+
+        <div id="setupBanner" class="steps-box" style="display:none; border-color:rgba(255,209,102,0.45);">
+          ⚠️ <strong>Modo Online ainda não conectado:</strong> Para jogar entre dispositivos diferentes pela internet, conecte seu Firebase gratuito clicando em <strong style="color:var(--neon-cyan); cursor:pointer;" id="openConfigInline">⚙️ Configurar Online</strong> (leva 2 min). Sem configurar, funciona entre abas do mesmo navegador.
+        </div>
 
         <form id="nickForm">
           <div class="form-group">
@@ -985,13 +745,13 @@
           <div class="menu-option pink" id="goCreateBtn">
             <div class="menu-icon">✨</div>
             <h3>Criar Sala</h3>
-            <p>Defina a senha, limite de jogadores (1 a 10) e gere um código exclusivo.</p>
+            <p>Defina a senha, limite de jogadores (1 a 10) e gere um código de 4 dígitos.</p>
           </div>
 
           <div class="menu-option" id="goJoinBtn">
             <div class="menu-icon">🔎</div>
             <h3>Procurar / Entrar em Sala</h3>
-            <p>Digite o código de 4 dígitos de uma sala existente para participar.</p>
+            <p>Digite o código da sala criada por um amigo para entrar ao vivo.</p>
           </div>
         </div>
 
@@ -1023,7 +783,7 @@
 
           <div class="btn-row" style="margin-top:24px;">
             <button type="button" class="btn btn-ghost" id="backFromCreateBtn">← Voltar</button>
-            <button type="submit" class="btn btn-primary">Gerar Código e Criar Sala 🎉</button>
+            <button type="submit" class="btn btn-primary" id="createRoomSubmitBtn">Gerar Código e Criar Sala 🎉</button>
           </div>
         </form>
       </div>
@@ -1048,15 +808,9 @@
 
           <div class="btn-row">
             <button type="button" class="btn btn-ghost" id="backFromJoinBtn">← Voltar</button>
-            <button type="submit" class="btn btn-cyan">Entrar na Sala 🚪</button>
+            <button type="submit" class="btn btn-cyan" id="joinRoomSubmitBtn">Entrar na Sala 🚪</button>
           </div>
         </form>
-
-        <!-- Salas ativas detectadas no navegador -->
-        <div class="room-list-mini" id="activeRoomsContainer" style="display:none;">
-          <label>📡 Salas Ativas Neste Navegador (Clique para preencher):</label>
-          <div id="activeRoomsList"></div>
-        </div>
       </div>
     </section>
 
@@ -1080,16 +834,16 @@
         </div>
 
         <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;">
-          <h3 style="font-size:1.1rem;">👥 Jogadores Aguardando</h3>
+          <h3 style="font-size:1.1rem;">👥 Jogadores Conectados</h3>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn btn-ghost" id="copyCodeBtn" style="padding:8px 14px; font-size:0.8rem;">📋 Copiar Código</button>
-            <button class="btn btn-cyan" id="addSimPlayerBtn" style="padding:8px 14px; font-size:0.8rem;">🤖 + Simular Jogador</button>
+            <button class="btn btn-cyan" id="copyInviteBtn" style="padding:8px 14px; font-size:0.8rem;">🔗 Copiar Link de Convite</button>
           </div>
         </div>
 
         <div class="players-list" id="lobbyPlayersList"></div>
 
-        <div class="status-panel" id="lobbyWaitingNotice" style="margin-bottom:18px; padding:14px;">
+        <div class="status-panel" style="margin-bottom:18px; padding:14px;">
           <span id="lobbyStatusText">Aguardando o criador iniciar a partida...</span>
         </div>
 
@@ -1116,7 +870,6 @@
           <div class="arena-ring"></div>
           <div class="arena-center-glow"></div>
           <div class="bottle-pivot" id="bottlePivot">
-            <!-- Garrafa Neon SVG -->
             <svg class="bottle-svg" viewBox="0 0 100 100" fill="none">
               <defs>
                 <linearGradient id="bottleGrad" x1="50" y1="5" x2="50" y2="95" gradientUnits="userSpaceOnUse">
@@ -1125,7 +878,6 @@
                   <stop offset="100%" stop-color="#ff2e93"/>
                 </linearGradient>
               </defs>
-              <!-- Ponteiro/Gargalo (aponta para cima = 0deg) -->
               <path d="M44 8 H56 L58 24 L67 36 V86 C67 90.4 63.4 94 59 94 H41 C36.6 94 33 90.4 33 86 V36 L42 24 L44 8Z" fill="url(#bottleGrad)" stroke="#ffffff" stroke-width="2.5"/>
               <rect x="43" y="4" width="14" height="6" rx="2" fill="#ffd166"/>
               <circle cx="50" cy="58" r="9" fill="#0d071e" stroke="#00f0ff" stroke-width="2"/>
@@ -1154,13 +906,56 @@
 
   </main>
 
+  <!-- MODAL DE CONFIGURAÇÃO DO FIREBASE -->
+  <div class="modal-backdrop" id="firebaseModal">
+    <div class="modal-box">
+      <h3 style="font-size:1.3rem; margin-bottom:10px; color:var(--neon-cyan);">🌐 Conectar Firebase Realtime Database</h3>
+      <div class="steps-box">
+        <strong>Passo a passo (100% gratuito):</strong><br/>
+        1. Crie um projeto no <strong>console.firebase.google.com</strong>.<br/>
+        2. Vá em <strong>Realtime Database → Criar banco de dados → Modo de teste</strong>.<br/>
+        3. Copie a URL do banco (ex: <code>https://meu-jogo-default-rtdb.firebaseio.com</code>) e cole abaixo!
+      </div>
+
+      <form id="firebaseConfigForm">
+        <div class="form-group">
+          <label for="fbUrlInput">Database URL do Firebase</label>
+          <input type="url" id="fbUrlInput" placeholder="https://seu-projeto-default-rtdb.firebaseio.com" required />
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-ghost" id="closeFbModalBtn">Fechar</button>
+          <button type="submit" class="btn btn-green">Salvar e Conectar ⚡</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
     (() => {
-      // ==========================================================
-      // ÁUDIO SINTETIZADO (WEB AUDIO API) — SEM ARQUIVOS EXTERNOS
-      // ==========================================================
+      // =========================================================================
+      // 1. CONFIGURAÇÃO DO FIREBASE REALTIME DATABASE
+      // Cole aqui a URL do seu Firebase Realtime Database se quiser deixar fixa no HTML:
+      // =========================================================================
+      const DEFAULT_FIREBASE_CONFIG = {
+        databaseURL: "" // Ex: "https://meu-projeto-default-rtdb.firebaseio.com"
+      };
+
+      const LOCAL_FB_URL_KEY = 'vd_firebase_db_url_v1';
+      const LOCAL_ROOMS_KEY = 'vd_local_fallback_rooms_v1';
+
+      // Permite passar ?db=URL&room=1234 no link de convite!
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramDb = urlParams.get('db');
+      const paramRoom = urlParams.get('room');
+      if (paramDb && paramDb.startsWith('https://')) {
+        localStorage.setItem(LOCAL_FB_URL_KEY, paramDb.trim());
+      }
+
+      // =========================================================================
+      // 2. ÁUDIO SINTETIZADO (WEB AUDIO API)
+      // =========================================================================
       const AudioFX = {
         enabled: true,
         ctx: null,
@@ -1189,26 +984,19 @@
           } catch {}
         },
         spin() {
-          for (let i = 0; i < 10; i++) {
-            this.tone(240 + i * 38, 0.06, 'triangle', 0.05, i * 0.14);
-          }
+          for (let i = 0; i < 10; i++) this.tone(240 + i * 38, 0.06, 'triangle', 0.05, i * 0.14);
         },
         fanfare() {
           this.tone(523.25, 0.12, 'triangle', 0.09, 0);
           this.tone(659.25, 0.12, 'triangle', 0.09, 0.1);
           this.tone(783.99, 0.25, 'triangle', 0.1, 0.2);
         },
-        pop() {
-          this.tone(580, 0.07, 'sine', 0.07, 0);
-        }
+        pop() { this.tone(580, 0.07, 'sine', 0.07, 0); }
       };
 
-      // ==========================================================
-      // CONSTANTES & PERSISTÊNCIA MULTIPLAYER (localStorage + BroadcastChannel)
-      // ==========================================================
-      const STORAGE_ROOMS_KEY = 'vd_show_rooms_v1';
-      const channel = ('BroadcastChannel' in window) ? new BroadcastChannel('vd_show_sync') : null;
-
+      // =========================================================================
+      // 3. CONSTANTES & ESTADO DA SESSÃO
+      // =========================================================================
       const AVATAR_COLORS = [
         'linear-gradient(135deg, #ff2e93, #7209b7)',
         'linear-gradient(135deg, #00f0ff, #0077b6)',
@@ -1228,81 +1016,260 @@
       const SUGGESTIONS_DARE = [
         'Mande um áudio cantando o refrão de uma música brega para o último contato!',
         'Fale com sotaque exagerado até o final da próxima rodada.',
-        'Faça 10 polichinelos agora ou pague uma prenda escolhida pelo grupo!',
-        'Imite um apresentador de TV anunciando um produto absurdo por 20 segundos.'
+        'Faça 10 polichinelos na câmera ou na frente do pessoal!',
+        'Imite um apresentador de TV vendendo um produto absurdo por 20 segundos.'
       ];
 
-      const BOT_NAMES = ['BiaNeon', 'MaxPower', 'LunaStar', 'ZecaShow', 'KiraVibe', 'TéoGamer', 'NinaPop', 'DaviFlash', 'SolangeVIP'];
-
-      // Estado local da aba
       const session = {
-        tabPlayerId: 'p_' + Math.random().toString(36).slice(2, 9),
+        playerId: 'p_' + Math.random().toString(36).slice(2, 10),
         nick: '',
         roomCode: null,
-        activePovId: null, // Permite alternar a visão entre jogadores locais/simulados na mesma aba
-        currentScreen: 'screen-nick',
-        selectedType: null, // 'truth' | 'dare'
-        selectedDoor: null, // 'open' | 'closed'
+        currentRoomData: null,
+        selectedType: null,
+        selectedDoor: null,
         lastSpinRoundRendered: 0,
-        bottleAngle: 0
+        bottleAngle: 0,
+        unsubscribeRoom: null
       };
 
-      // ==========================================================
-      // HELPERS DE ARMAZENAMENTO
-      // ==========================================================
-      function loadRooms() {
-        try {
-          return JSON.parse(localStorage.getItem(STORAGE_ROOMS_KEY)) || {};
-        } catch {
-          return {};
+      // =========================================================================
+      // 4. CAMADA DE BANCO DE DADOS EM TEMPO REAL (FIREBASE + FALLBACK LOCAL)
+      // =========================================================================
+      const RealtimeDB = {
+        mode: 'local', // 'firebase' | 'local'
+        db: null,
+        dbUrl: '',
+        channel: ('BroadcastChannel' in window) ? new BroadcastChannel('vd_online_fallback') : null,
+        localWatcher: null,
+
+        init() {
+          const savedUrl = DEFAULT_FIREBASE_CONFIG.databaseURL || localStorage.getItem(LOCAL_FB_URL_KEY) || '';
+          if (savedUrl && savedUrl.startsWith('https://') && typeof firebase !== 'undefined') {
+            try {
+              if (firebase.apps.length > 0) {
+                // Reaproveita ou reinicializa app se URL mudou
+                const currentApp = firebase.app();
+                if (currentApp.options.databaseURL !== savedUrl) {
+                  // Nome único para permitir trocar URL sem recarregar
+                  const appName = 'vd_' + Date.now();
+                  const app = firebase.initializeApp({ databaseURL: savedUrl }, appName);
+                  this.db = app.database();
+                } else {
+                  this.db = currentApp.database();
+                }
+              } else {
+                firebase.initializeApp({ databaseURL: savedUrl });
+                this.db = firebase.database();
+              }
+              this.dbUrl = savedUrl.replace(/\/+$/, '');
+              this.mode = 'firebase';
+            } catch (err) {
+              console.error('Erro ao conectar Firebase:', err);
+              this.mode = 'local';
+            }
+          } else {
+            this.mode = 'local';
+          }
+          this.updateConnectionUI();
+        },
+
+        updateConnectionUI() {
+          const pill = document.getElementById('connStatusPill');
+          const dot = document.getElementById('connDot');
+          const label = document.getElementById('connLabel');
+          const banner = document.getElementById('setupBanner');
+
+          if (this.mode === 'firebase') {
+            pill.className = 'pill-info conn-pill online';
+            dot.textContent = '🟢';
+            label.textContent = 'Online (Firebase)';
+            banner.style.display = 'none';
+          } else {
+            pill.className = 'pill-info conn-pill local';
+            dot.textContent = '🟡';
+            label.textContent = 'Configurar Online';
+            banner.style.display = 'block';
+          }
+        },
+
+        async roomExists(code) {
+          if (this.mode === 'firebase') {
+            const snap = await this.db.ref(`rooms/${code}`).once('value');
+            return snap.exists();
+          }
+          const rooms = this._getLocalRooms();
+          return Boolean(rooms[code]);
+        },
+
+        async getRoomOnce(code) {
+          if (this.mode === 'firebase') {
+            const snap = await this.db.ref(`rooms/${code}`).once('value');
+            return snap.val();
+          }
+          return this._getLocalRooms()[code] || null;
+        },
+
+        async createRoom(roomObj, hostPlayer) {
+          const payload = {
+            ...roomObj,
+            players: {
+              [hostPlayer.id]: hostPlayer
+            }
+          };
+
+          if (this.mode === 'firebase') {
+            const roomRef = this.db.ref(`rooms/${roomObj.code}`);
+            await roomRef.set(payload);
+            // Remove jogador automaticamente se perder conexão / fechar navegador
+            this.db.ref(`rooms/${roomObj.code}/players/${hostPlayer.id}`).onDisconnect().remove();
+            return payload;
+          } else {
+            const rooms = this._getLocalRooms();
+            rooms[roomObj.code] = payload;
+            this._saveLocalRooms(rooms);
+            return payload;
+          }
+        },
+
+        async joinRoom(code, password, playerObj) {
+          if (this.mode === 'firebase') {
+            const roomRef = this.db.ref(`rooms/${code}`);
+            const snap = await roomRef.once('value');
+            const room = snap.val();
+
+            if (!room) throw new Error('ROOM_NOT_FOUND');
+            if (room.password && room.password !== password) throw new Error('WRONG_PASSWORD');
+
+            const playersMap = room.players || {};
+            const count = Object.keys(playersMap).length;
+            if (!playersMap[playerObj.id] && count >= room.maxPlayers) {
+              throw new Error('ROOM_FULL');
+            }
+
+            playerObj.color = AVATAR_COLORS[count % AVATAR_COLORS.length];
+            const playerRef = this.db.ref(`rooms/${code}/players/${playerObj.id}`);
+            await playerRef.set(playerObj);
+            playerRef.onDisconnect().remove();
+            return;
+          } else {
+            const rooms = this._getLocalRooms();
+            const room = rooms[code];
+            if (!room) throw new Error('ROOM_NOT_FOUND');
+            if (room.password && room.password !== password) throw new Error('WRONG_PASSWORD');
+            room.players = room.players || {};
+            const count = Object.keys(room.players).length;
+            if (!room.players[playerObj.id] && count >= room.maxPlayers) throw new Error('ROOM_FULL');
+            playerObj.color = AVATAR_COLORS[count % AVATAR_COLORS.length];
+            room.players[playerObj.id] = playerObj;
+            this._saveLocalRooms(rooms);
+          }
+        },
+
+        async updateRoomFields(code, updates) {
+          if (this.mode === 'firebase') {
+            await this.db.ref(`rooms/${code}`).update(updates);
+          } else {
+            const rooms = this._getLocalRooms();
+            if (!rooms[code]) return;
+            Object.entries(updates).forEach(([path, val]) => {
+              this._setByPath(rooms[code], path, val);
+            });
+            this._saveLocalRooms(rooms);
+          }
+        },
+
+        async leaveRoom(code, playerId) {
+          if (!code || !playerId) return;
+          if (this.mode === 'firebase') {
+            const pRef = this.db.ref(`rooms/${code}/players/${playerId}`);
+            try { await pRef.onDisconnect().cancel(); } catch {}
+            await pRef.remove();
+
+            // Verifica se a sala ficou vazia para limpar ou transferir host
+            const roomSnap = await this.db.ref(`rooms/${code}`).once('value');
+            const room = roomSnap.val();
+            if (room) {
+              const remaining = Object.values(room.players || {});
+              if (remaining.length === 0) {
+                await this.db.ref(`rooms/${code}`).remove();
+              } else if (room.hostId === playerId) {
+                remaining.sort((a, b) => a.joinedAt - b.joinedAt);
+                await this.db.ref(`rooms/${code}/hostId`).set(remaining[0].id);
+              }
+            }
+          } else {
+            const rooms = this._getLocalRooms();
+            const room = rooms[code];
+            if (room && room.players) {
+              delete room.players[playerId];
+              const remaining = Object.values(room.players);
+              if (remaining.length === 0) {
+                delete rooms[code];
+              } else if (room.hostId === playerId) {
+                remaining.sort((a, b) => a.joinedAt - b.joinedAt);
+                room.hostId = remaining[0].id;
+              }
+              this._saveLocalRooms(rooms);
+            }
+          }
+        },
+
+        subscribeRoom(code, callback) {
+          if (this.mode === 'firebase') {
+            const roomRef = this.db.ref(`rooms/${code}`);
+            const handler = (snap) => callback(snap.val());
+            roomRef.on('value', handler);
+            return () => roomRef.off('value', handler);
+          } else {
+            const handler = () => callback(this._getLocalRooms()[code] || null);
+            const onMsg = (e) => { if (e.data?.code === code) handler(); };
+            const onStorage = (e) => { if (e.key === LOCAL_ROOMS_KEY) handler(); };
+            if (this.channel) this.channel.addEventListener('message', onMsg);
+            window.addEventListener('storage', onStorage);
+            this.localWatcher = handler;
+            handler();
+            return () => {
+              if (this.channel) this.channel.removeEventListener('message', onMsg);
+              window.removeEventListener('storage', onStorage);
+              this.localWatcher = null;
+            };
+          }
+        },
+
+        // Helpers Local Fallback
+        _getLocalRooms() {
+          try { return JSON.parse(localStorage.getItem(LOCAL_ROOMS_KEY)) || {}; } catch { return {}; }
+        },
+        _saveLocalRooms(rooms) {
+          localStorage.setItem(LOCAL_ROOMS_KEY, JSON.stringify(rooms));
+          if (this.channel) this.channel.postMessage({ code: session.roomCode });
+          if (this.localWatcher) this.localWatcher();
+        },
+        _setByPath(obj, path, value) {
+          const parts = path.split('/');
+          let cur = obj;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+            cur = cur[parts[i]];
+          }
+          cur[parts[parts.length - 1]] = value;
         }
-      }
+      };
 
-      function saveRooms(rooms, broadcast = true) {
-        localStorage.setItem(STORAGE_ROOMS_KEY, JSON.stringify(rooms));
-        if (broadcast && channel) {
-          channel.postMessage({ type: 'SYNC_ROOMS', sender: session.tabPlayerId });
-        }
-      }
-
-      function getRoom(code = session.roomCode) {
-        if (!code) return null;
-        const rooms = loadRooms();
-        return rooms[code] || null;
-      }
-
-      function updateRoom(code, mutator) {
-        const rooms = loadRooms();
-        const room = rooms[code];
-        if (!room) return null;
-        mutator(room);
-        room.updatedAt = Date.now();
-        rooms[code] = room;
-        saveRooms(rooms, true);
-        return room;
-      }
-
-      function getViewerId(room) {
-        if (!room) return session.tabPlayerId;
-        if (session.activePovId && room.players.some(p => p.id === session.activePovId)) {
-          return session.activePovId;
-        }
-        return session.tabPlayerId;
-      }
-
+      // =========================================================================
+      // 5. UTILITÁRIOS DE UI
+      // =========================================================================
       function showToast(msg) {
         const el = document.getElementById('toast');
         el.textContent = msg;
         el.classList.add('show');
         clearTimeout(el._timer);
-        el._timer = setTimeout(() => el.classList.remove('show'), 2800);
+        el._timer = setTimeout(() => el.classList.remove('show'), 3000);
       }
 
       function showScreen(id) {
-        session.currentScreen = id;
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(id).classList.add('active');
-        updatePovBar();
       }
 
       function escapeHTML(str) {
@@ -1311,54 +1278,51 @@
         }[m]));
       }
 
-      // ==========================================================
-      // POV SWITCHER (MULTIPLAYER SIMULADO NA MESMA TELA)
-      // ==========================================================
-      function updatePovBar() {
-        const povBar = document.getElementById('povBar');
-        const povButtons = document.getElementById('povButtons');
-        const room = getRoom();
-
-        if (!room || (session.currentScreen !== 'screen-lobby' && session.currentScreen !== 'screen-game')) {
-          povBar.classList.remove('visible');
-          return;
-        }
-
-        // Mostra o switcher quando houver mais de 1 jogador ou jogadores simulados
-        const hasSim = room.players.some(p => p.isSim);
-        if (room.players.length > 1 || hasSim) {
-          povBar.classList.add('visible');
-        } else {
-          povBar.classList.remove('visible');
-          return;
-        }
-
-        const currentPov = getViewerId(room);
-        povButtons.innerHTML = '';
-
-        room.players.forEach(p => {
-          const btn = document.createElement('button');
-          btn.className = 'pov-chip' + (p.id === currentPov ? ' active' : '');
-          let roleTag = '';
-          if (room.status === 'playing' && room.roundData) {
-            if (p.id === room.roundData.askerId) roleTag = ' 🎤';
-            else if (p.id === room.roundData.responderId) roleTag = ' 🎯';
-          }
-          btn.textContent = `${p.isSim ? '🤖' : '👤'} ${p.nick}${p.id === room.hostId ? ' 👑' : ''}${roleTag}`;
-          btn.onclick = () => {
-            session.activePovId = p.id;
-            session.selectedType = null;
-            session.selectedDoor = null;
-            AudioFX.pop();
-            renderCurrentRoom();
-          };
-          povButtons.appendChild(btn);
-        });
+      function getSortedPlayers(room) {
+        if (!room || !room.players) return [];
+        return Object.values(room.players).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
       }
 
-      // ==========================================================
-      // FLUXO 1: NICKNAME & MENU PRINCIPAL
-      // ==========================================================
+      // =========================================================================
+      // 6. MODAL DE CONFIGURAÇÃO FIREBASE
+      // =========================================================================
+      const fbModal = document.getElementById('firebaseModal');
+      const openFbModal = () => {
+        document.getElementById('fbUrlInput').value = RealtimeDB.dbUrl || localStorage.getItem(LOCAL_FB_URL_KEY) || '';
+        fbModal.classList.add('open');
+      };
+
+      document.getElementById('connStatusPill').onclick = openFbModal;
+      document.getElementById('openConfigInline').onclick = openFbModal;
+      document.getElementById('closeFbModalBtn').onclick = () => fbModal.classList.remove('open');
+
+      document.getElementById('firebaseConfigForm').addEventListener('submit', e => {
+        e.preventDefault();
+        let url = document.getElementById('fbUrlInput').value.trim();
+        if (!url.startsWith('https://')) {
+          showToast('❌ A URL precisa começar com https://');
+          return;
+        }
+        url = url.replace(/\/+$/, '');
+        localStorage.setItem(LOCAL_FB_URL_KEY, url);
+        RealtimeDB.init();
+        fbModal.classList.remove('open');
+        if (RealtimeDB.mode === 'firebase') {
+          AudioFX.fanfare();
+          showToast('🟢 Conectado ao Firebase Realtime Database!');
+        } else {
+          showToast('❌ Não foi possível conectar. Verifique a URL.');
+        }
+      });
+
+      // =========================================================================
+      // 7. NAVEGAÇÃO & TELAS INICIAIS
+      // =========================================================================
+      document.getElementById('soundToggleBtn').onclick = () => {
+        AudioFX.enabled = !AudioFX.enabled;
+        document.getElementById('soundToggleBtn').textContent = AudioFX.enabled ? '🔊 Som' : '🔇 Mudo';
+      };
+
       document.getElementById('nickForm').addEventListener('submit', e => {
         e.preventDefault();
         const nick = document.getElementById('nickInput').value.trim();
@@ -1368,234 +1332,207 @@
         document.getElementById('menuNick').textContent = nick;
         document.getElementById('userBadge').style.display = 'flex';
         AudioFX.pop();
-        showScreen('screen-menu');
+
+        // Se veio por link de convite com ?room=XXXX, já direciona para entrar!
+        if (paramRoom && /^\d{4}$/.test(paramRoom)) {
+          document.getElementById('joinCodeInput').value = paramRoom;
+          showScreen('screen-join');
+          showToast(`Código ${paramRoom} preenchido! Clique em Entrar.`);
+        } else {
+          showScreen('screen-menu');
+        }
       });
 
       document.getElementById('changeNickBtn').onclick = () => showScreen('screen-nick');
-      document.getElementById('goCreateBtn').onclick = () => {
-        AudioFX.pop();
-        showScreen('screen-create');
-      };
-      document.getElementById('goJoinBtn').onclick = () => {
-        AudioFX.pop();
-        renderAvailableRooms();
-        showScreen('screen-join');
-      };
+      document.getElementById('goCreateBtn').onclick = () => { AudioFX.pop(); showScreen('screen-create'); };
+      document.getElementById('goJoinBtn').onclick = () => { AudioFX.pop(); showScreen('screen-join'); };
       document.getElementById('backFromCreateBtn').onclick = () => showScreen('screen-menu');
       document.getElementById('backFromJoinBtn').onclick = () => showScreen('screen-menu');
 
-      document.getElementById('soundToggleBtn').onclick = () => {
-        AudioFX.enabled = !AudioFX.enabled;
-        document.getElementById('soundToggleBtn').textContent = AudioFX.enabled ? '🔊 Som: ON' : '🔇 Som: OFF';
-      };
-
-      // ==========================================================
-      // FLUXO 2: CRIAR SALA
-      // ==========================================================
       const maxRange = document.getElementById('maxPlayersRange');
       const maxVal = document.getElementById('maxPlayersVal');
-      maxRange.addEventListener('input', () => {
-        maxVal.textContent = maxRange.value;
-      });
+      maxRange.addEventListener('input', () => { maxVal.textContent = maxRange.value; });
 
-      function generateUniqueRoomCode(rooms) {
-        let code;
-        do {
-          code = String(Math.floor(1000 + Math.random() * 9000));
-        } while (rooms[code]);
-        return code;
-      }
-
-      document.getElementById('createRoomForm').addEventListener('submit', e => {
-        e.preventDefault();
-        const password = document.getElementById('roomPassInput').value.trim();
-        const maxPlayers = parseInt(maxRange.value, 10);
-        const rooms = loadRooms();
-        const code = generateUniqueRoomCode(rooms);
-
-        const hostPlayer = {
-          id: session.tabPlayerId,
-          nick: session.nick,
-          color: AVATAR_COLORS[0],
-          isSim: false
-        };
-
-        rooms[code] = {
-          code,
-          password,
-          maxPlayers,
-          hostId: hostPlayer.id,
-          status: 'lobby', // 'lobby' | 'playing'
-          players: [hostPlayer],
-          round: 0,
-          roundData: null,
-          updatedAt: Date.now()
-        };
-
-        saveRooms(rooms, true);
-        session.roomCode = code;
-        session.activePovId = hostPlayer.id;
-        AudioFX.fanfare();
-        showToast(`Sala ${code} criada com sucesso!`);
-        renderCurrentRoom();
-      });
-
-      // ==========================================================
-      // FLUXO 3: PROCURAR / ENTRAR EM SALA
-      // ==========================================================
-      function renderAvailableRooms() {
-        const rooms = loadRooms();
-        const list = Object.values(rooms).filter(r => r.players.length > 0);
-        const container = document.getElementById('activeRoomsContainer');
-        const listEl = document.getElementById('activeRoomsList');
-
-        if (!list.length) {
-          container.style.display = 'none';
-          return;
+      // =========================================================================
+      // 8. CRIAR SALA & ENTRAR EM SALA (SINCRONIZADO)
+      // =========================================================================
+      async function generateUniqueRoomCode() {
+        for (let i = 0; i < 15; i++) {
+          const code = String(Math.floor(1000 + Math.random() * 9000));
+          const exists = await RealtimeDB.roomExists(code);
+          if (!exists) return code;
         }
-        container.style.display = 'block';
-        listEl.innerHTML = '';
-
-        list.forEach(r => {
-          const item = document.createElement('div');
-          item.className = 'room-mini-item';
-          item.innerHTML = `
-            <div>
-              <strong>Sala #${r.code}</strong>
-              <span style="color:var(--text-muted); font-size:0.82rem; margin-left:8px;">
-                ${r.password ? '🔒 Com senha' : '🔓 Aberta'} • ${r.status === 'playing' ? 'Em jogo' : 'No Lobby'}
-              </span>
-            </div>
-            <span class="badge badge-open">${r.players.length}/${r.maxPlayers} jogadores</span>
-          `;
-          item.onclick = () => {
-            document.getElementById('joinCodeInput').value = r.code;
-            AudioFX.pop();
-          };
-          listEl.appendChild(item);
-        });
+        return String(Math.floor(1000 + Math.random() * 9000));
       }
 
-      document.getElementById('joinRoomForm').addEventListener('submit', e => {
+      document.getElementById('createRoomForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const btn = document.getElementById('createRoomSubmitBtn');
+        btn.disabled = true;
+        btn.textContent = 'Criando sala...';
+
+        try {
+          const password = document.getElementById('roomPassInput').value.trim();
+          const maxPlayers = parseInt(maxRange.value, 10);
+          const code = await generateUniqueRoomCode();
+
+          const hostPlayer = {
+            id: session.playerId,
+            nick: session.nick,
+            color: AVATAR_COLORS[0],
+            joinedAt: Date.now()
+          };
+
+          const roomObj = {
+            code,
+            password,
+            maxPlayers,
+            hostId: hostPlayer.id,
+            status: 'lobby',
+            round: 0,
+            createdAt: Date.now()
+          };
+
+          await RealtimeDB.createRoom(roomObj, hostPlayer);
+          connectToRoomRealtime(code);
+          AudioFX.fanfare();
+          showToast(`Sala #${code} criada ao vivo!`);
+        } catch (err) {
+          console.error(err);
+          showToast('❌ Erro ao criar sala. Verifique sua conexão ou regras do Firebase.');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Gerar Código e Criar Sala 🎉';
+        }
+      });
+
+      document.getElementById('joinRoomForm').addEventListener('submit', async e => {
         e.preventDefault();
         const code = document.getElementById('joinCodeInput').value.trim();
         const pass = document.getElementById('joinPassInput').value.trim();
-        const rooms = loadRooms();
-        const room = rooms[code];
+        const btn = document.getElementById('joinRoomSubmitBtn');
+        btn.disabled = true;
+        btn.textContent = 'Conectando...';
 
-        if (!room) {
-          showToast('❌ Sala não encontrada! Verifique o código.');
-          return;
-        }
-        if (room.password && room.password !== pass) {
-          showToast('🔒 Senha incorreta!');
-          return;
-        }
-
-        const alreadyIn = room.players.some(p => p.id === session.tabPlayerId);
-        if (!alreadyIn) {
-          if (room.players.length >= room.maxPlayers) {
-            showToast('⚠️ Esta sala já atingiu o limite máximo de jogadores!');
-            return;
-          }
-          room.players.push({
-            id: session.tabPlayerId,
+        try {
+          const playerObj = {
+            id: session.playerId,
             nick: session.nick,
-            color: AVATAR_COLORS[room.players.length % AVATAR_COLORS.length],
-            isSim: false
-          });
-          rooms[code] = room;
-          saveRooms(rooms, true);
-        }
+            color: AVATAR_COLORS[0],
+            joinedAt: Date.now()
+          };
 
-        session.roomCode = code;
-        session.activePovId = session.tabPlayerId;
-        AudioFX.fanfare();
-        showToast(`Você entrou na sala #${code}!`);
-        renderCurrentRoom();
+          await RealtimeDB.joinRoom(code, pass, playerObj);
+          connectToRoomRealtime(code);
+          AudioFX.fanfare();
+          showToast(`Você entrou na sala #${code}!`);
+        } catch (err) {
+          if (err.message === 'ROOM_NOT_FOUND') showToast('❌ Sala não encontrada! Confira o código.');
+          else if (err.message === 'WRONG_PASSWORD') showToast('🔒 Senha incorreta!');
+          else if (err.message === 'ROOM_FULL') showToast('⚠️ Sala cheia!');
+          else {
+            console.error(err);
+            showToast('❌ Erro ao entrar na sala.');
+          }
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Entrar na Sala 🚪';
+        }
       });
 
-      // ==========================================================
-      // LOBBY: CONTROLES, SIMULAÇÃO DE JOGADORES & INICIAR PARTIDA
-      // ==========================================================
+      function connectToRoomRealtime(code) {
+        if (session.unsubscribeRoom) session.unsubscribeRoom();
+        session.roomCode = code;
+        session.lastSpinRoundRendered = 0;
+
+        session.unsubscribeRoom = RealtimeDB.subscribeRoom(code, (room) => {
+          session.currentRoomData = room;
+
+          if (!room) {
+            if (session.roomCode) {
+              disconnectFromRoomLocal();
+              showToast('A sala foi encerrada.');
+              showScreen('screen-menu');
+            }
+            return;
+          }
+
+          // Garante que existe um host válido caso o criador tenha caído abruptamente
+          const players = getSortedPlayers(room);
+          if (players.length > 0 && !players.some(p => p.id === room.hostId)) {
+            if (players[0].id === session.playerId) {
+              RealtimeDB.updateRoomFields(room.code, { hostId: session.playerId });
+            }
+          }
+
+          if (room.status === 'lobby') {
+            showScreen('screen-lobby');
+            renderLobby(room, players);
+          } else if (room.status === 'playing') {
+            showScreen('screen-game');
+            renderGame(room, players);
+          }
+        });
+      }
+
+      function disconnectFromRoomLocal() {
+        if (session.unsubscribeRoom) {
+          session.unsubscribeRoom();
+          session.unsubscribeRoom = null;
+        }
+        session.roomCode = null;
+        session.currentRoomData = null;
+        session.lastSpinRoundRendered = 0;
+      }
+
+      async function handleLeaveRoom() {
+        const code = session.roomCode;
+        disconnectFromRoomLocal();
+        showScreen('screen-menu');
+        if (code) {
+          await RealtimeDB.leaveRoom(code, session.playerId);
+        }
+      }
+
+      document.getElementById('leaveLobbyBtn').onclick = handleLeaveRoom;
+      document.getElementById('leaveGameBtn').onclick = handleLeaveRoom;
+
+      // Copiar código e link de convite
       document.getElementById('copyCodeBtn').onclick = () => {
         if (!session.roomCode) return;
         navigator.clipboard?.writeText(session.roomCode).catch(() => {});
         showToast(`Código ${session.roomCode} copiado!`);
       };
 
-      document.getElementById('addSimPlayerBtn').onclick = () => {
-        const room = getRoom();
-        if (!room) return;
-        if (room.players.length >= room.maxPlayers) {
-          showToast('⚠️ Limite máximo da sala atingido!');
-          return;
-        }
-        const usedNicks = new Set(room.players.map(p => p.nick));
-        const available = BOT_NAMES.filter(n => !usedNicks.has(n));
-        const botName = available.length ? available[Math.floor(Math.random() * available.length)] : `Jogador_${room.players.length + 1}`;
-
-        updateRoom(room.code, r => {
-          r.players.push({
-            id: 'sim_' + Math.random().toString(36).slice(2, 8),
-            nick: botName,
-            color: AVATAR_COLORS[r.players.length % AVATAR_COLORS.length],
-            isSim: true
-          });
-        });
-        AudioFX.pop();
-        showToast(`🤖 ${botName} entrou na sala! Use a barra acima para controlar ou deixe no automático.`);
-        renderCurrentRoom();
+      document.getElementById('copyInviteBtn').onclick = () => {
+        if (!session.roomCode) return;
+        const base = window.location.href.split('?')[0];
+        const params = new URLSearchParams();
+        params.set('room', session.roomCode);
+        if (RealtimeDB.dbUrl) params.set('db', RealtimeDB.dbUrl);
+        const fullLink = `${base}?${params.toString()}`;
+        navigator.clipboard?.writeText(fullLink).catch(() => {});
+        showToast('🔗 Link de convite copiado! Envie para seus amigos.');
       };
 
-      function leaveCurrentRoom() {
-        const code = session.roomCode;
-        if (!code) return;
-        const rooms = loadRooms();
-        const room = rooms[code];
-        if (room) {
-          const viewerId = session.tabPlayerId;
-          room.players = room.players.filter(p => p.id !== viewerId);
-          // Se só sobrarem bots ou nenhum jogador real, limpa a sala ou passa o host
-          const realPlayers = room.players.filter(p => !p.isSim);
-          if (room.players.length === 0 || realPlayers.length === 0) {
-            delete rooms[code];
-          } else {
-            if (room.hostId === viewerId) {
-              room.hostId = realPlayers[0].id;
-            }
-            rooms[code] = room;
-          }
-          saveRooms(rooms, true);
-        }
-        session.roomCode = null;
-        session.activePovId = null;
-        session.lastSpinRoundRendered = 0;
-        showScreen('screen-menu');
-      }
-
-      document.getElementById('leaveLobbyBtn').onclick = leaveCurrentRoom;
-      document.getElementById('leaveGameBtn').onclick = leaveCurrentRoom;
-
+      // =========================================================================
+      // 9. INICIAR PARTIDA & SORTEIO SINCRONIZADO DA ROLETA
+      // =========================================================================
       document.getElementById('startMatchBtn').onclick = () => {
-        const room = getRoom();
+        const room = session.currentRoomData;
         if (!room) return;
-        if (room.players.length < 2 && room.maxPlayers > 1) {
-          showToast('⚠️ Adicione pelo menos 2 jogadores (ou clique em "+ Simular Jogador")!');
+        const players = getSortedPlayers(room);
+        if (players.length < 2 && room.maxPlayers > 1) {
+          showToast('⚠️ Aguarde pelo menos 2 jogadores entrarem na sala!');
           return;
         }
-        startNewRound(room.code);
+        startNewRound(room);
       };
 
-      // ==========================================================
-      // MECÂNICA DA PARTIDA: ROLETA / GARRAFA & FASES
-      // ==========================================================
-      function startNewRound(code) {
-        const room = getRoom(code);
-        if (!room || room.players.length === 0) return;
+      async function startNewRound(room) {
+        const players = getSortedPlayers(room);
+        if (!players.length) return;
 
-        // Sorteia Perguntador e Respondedor
-        const players = room.players;
         const askerIdx = Math.floor(Math.random() * players.length);
         let responderIdx = askerIdx;
         if (players.length > 1) {
@@ -1607,159 +1544,71 @@
         const asker = players[askerIdx];
         const responder = players[responderIdx];
 
-        // Calcula ângulo alvo para a garrafa apontar exatamente para o Respondedor
         const responderAngle = (responderIdx / players.length) * 360;
         const extraSpins = 360 * (4 + Math.floor(Math.random() * 3));
         const currentBase = room.roundData?.targetAngle || 0;
         const nextBase = currentBase - (currentBase % 360) + extraSpins + responderAngle;
+        const nextRound = (room.round || 0) + 1;
 
-        updateRoom(code, r => {
-          r.status = 'playing';
-          r.round += 1;
-          r.roundData = {
-            roundNum: r.round,
-            phase: 'spinning', // 'spinning' -> 'choosing' -> 'asking' -> 'answering' -> 'summary'
+        session.selectedType = null;
+        session.selectedDoor = null;
+
+        await RealtimeDB.updateRoomFields(room.code, {
+          status: 'playing',
+          round: nextRound,
+          roundData: {
+            roundNum: nextRound,
+            phase: 'spinning',
             askerId: asker.id,
             responderId: responder.id,
             targetAngle: nextBase,
             spinEndsAt: Date.now() + 3300,
-            choiceType: null, // 'truth' | 'dare'
-            doorType: null,   // 'open' | 'closed'
+            choiceType: '',
+            doorType: '',
             questionText: '',
             answerText: ''
-          };
+          }
         });
-
-        session.selectedType = null;
-        session.selectedDoor = null;
-        AudioFX.spin();
-        renderCurrentRoom();
       }
 
-      // Loop leve para transições de timer (fim do giro e simulação de bots)
+      // Timer sincronizado: o host promove de 'spinning' -> 'choosing' quando o tempo do giro termina
       setInterval(() => {
-        const room = getRoom();
+        const room = session.currentRoomData;
         if (!room || room.status !== 'playing' || !room.roundData) return;
         const rd = room.roundData;
 
-        // 1. Finaliza animação da roleta após 3.3s
         if (rd.phase === 'spinning' && Date.now() >= rd.spinEndsAt) {
-          // Apenas o host ou a aba ativa promove a fase para evitar corrida
-          if (room.hostId === session.tabPlayerId || !room.players.some(p => p.id === room.hostId && !p.isSim)) {
-            updateRoom(room.code, r => {
-              if (r.roundData && r.roundData.phase === 'spinning') {
-                r.roundData.phase = 'choosing';
-              }
+          if (room.hostId === session.playerId) {
+            RealtimeDB.updateRoomFields(room.code, {
+              'roundData/phase': 'choosing'
             });
-            AudioFX.fanfare();
-            renderCurrentRoom();
           }
         }
+      }, 300);
 
-        // 2. Se o jogador da vez for um Bot (isSim) e o usuário NÃO estiver controlando o POV dele, o Bot age após pequeno delay
-        const activePov = getViewerId(room);
-        if (rd.phase === 'choosing') {
-          const responder = room.players.find(p => p.id === rd.responderId);
-          if (responder && responder.isSim && activePov !== responder.id && !rd._botScheduled) {
-            rd._botScheduled = true;
-            setTimeout(() => {
-              const latest = getRoom(room.code);
-              if (!latest || latest.roundData?.phase !== 'choosing') return;
-              // Se usuário assumiu o POV do bot nesse meio tempo, não faz automático
-              if (getViewerId(latest) === responder.id) return;
-              updateRoom(room.code, r => {
-                r.roundData.choiceType = Math.random() > 0.5 ? 'truth' : 'dare';
-                r.roundData.doorType = Math.random() > 0.45 ? 'open' : 'closed';
-                r.roundData.phase = 'asking';
-              });
-              AudioFX.pop();
-              renderCurrentRoom();
-            }, 1800);
-          }
-        } else if (rd.phase === 'asking') {
-          const asker = room.players.find(p => p.id === rd.askerId);
-          if (asker && asker.isSim && activePov !== asker.id && !rd._botAskScheduled) {
-            rd._botAskScheduled = true;
-            setTimeout(() => {
-              const latest = getRoom(room.code);
-              if (!latest || latest.roundData?.phase !== 'asking') return;
-              if (getViewerId(latest) === asker.id) return;
-              const pool = latest.roundData.choiceType === 'truth' ? SUGGESTIONS_TRUTH : SUGGESTIONS_DARE;
-              const pick = pool[Math.floor(Math.random() * pool.length)];
-              updateRoom(room.code, r => {
-                r.roundData.questionText = pick;
-                r.roundData.phase = 'answering';
-              });
-              AudioFX.pop();
-              renderCurrentRoom();
-            }, 2000);
-          }
-        } else if (rd.phase === 'answering') {
-          const responder = room.players.find(p => p.id === rd.responderId);
-          if (responder && responder.isSim && activePov !== responder.id && !rd._botAnsScheduled) {
-            rd._botAnsScheduled = true;
-            setTimeout(() => {
-              const latest = getRoom(room.code);
-              if (!latest || latest.roundData?.phase !== 'answering') return;
-              if (getViewerId(latest) === responder.id) return;
-              const isTruth = latest.roundData.choiceType === 'truth';
-              updateRoom(room.code, r => {
-                r.roundData.answerText = isTruth
-                  ? 'Haha! Confesso que já passei por isso sim, mas sobrevivi! 😅'
-                  : 'Desafio cumprido ao vivo com sucesso! 🔥';
-                r.roundData.phase = 'summary';
-              });
-              AudioFX.fanfare();
-              renderCurrentRoom();
-            }, 2200);
-          }
-        }
-      }, 350);
-
-      // ==========================================================
-      // RENDERIZAÇÃO PRINCIPAL
-      // ==========================================================
-      function renderCurrentRoom() {
-        const room = getRoom();
-        if (!room) {
-          if (session.roomCode) {
-            session.roomCode = null;
-            showToast('A sala foi encerrada.');
-            showScreen('screen-menu');
-          }
-          return;
-        }
-
-        if (room.status === 'lobby') {
-          showScreen('screen-lobby');
-          renderLobby(room);
-        } else if (room.status === 'playing') {
-          showScreen('screen-game');
-          renderGame(room);
-        }
-        updatePovBar();
-      }
-
-      function renderLobby(room) {
-        const viewerId = getViewerId(room);
-        const isHost = viewerId === room.hostId;
+      // =========================================================================
+      // 10. RENDERIZAÇÃO DO LOBBY & GAMEPLAY
+      // =========================================================================
+      function renderLobby(room, players) {
+        const isHost = session.playerId === room.hostId;
 
         document.getElementById('lobbyCode').textContent = room.code;
         document.getElementById('lobbyLockIcon').textContent = room.password ? '🔒' : '🔓';
         document.getElementById('lobbyLockText').textContent = room.password ? 'Protegida por Senha' : 'Sala Aberta';
-        document.getElementById('lobbyCount').textContent = `${room.players.length}/${room.maxPlayers}`;
+        document.getElementById('lobbyCount').textContent = `${players.length}/${room.maxPlayers}`;
 
         const listEl = document.getElementById('lobbyPlayersList');
         listEl.innerHTML = '';
 
-        room.players.forEach(p => {
+        players.forEach(p => {
+          const isMe = p.id === session.playerId;
           const tile = document.createElement('div');
-          tile.className = 'player-tile' + (p.id === viewerId ? ' is-me' : '');
+          tile.className = 'player-tile' + (isMe ? ' is-me' : '');
           tile.innerHTML = `
             <div class="player-avatar" style="background:${p.color};">${escapeHTML(p.nick.charAt(0).toUpperCase())}</div>
             <div class="player-meta">
-              <div class="player-name">${escapeHTML(p.nick)} ${p.id === viewerId ? '(Você)' : ''}</div>
-              <div class="player-tag">${p.id === room.hostId ? '👑 Criador da Sala' : (p.isSim ? '🤖 Simulado' : '🎮 Jogador')}</div>
+              <div class="player-name">${escapeHTML(p.nick)} ${isMe ? '(Você)' : ''}</div>
+              <div class="player-tag">${p.id === room.hostId ? '👑 Criador da Sala' : '🟢 Conectado'}</div>
             </div>
           `;
           listEl.appendChild(tile);
@@ -1767,50 +1616,44 @@
 
         const startBtn = document.getElementById('startMatchBtn');
         const statusText = document.getElementById('lobbyStatusText');
-        const addSimBtn = document.getElementById('addSimPlayerBtn');
-
-        addSimBtn.disabled = room.players.length >= room.maxPlayers;
 
         if (isHost) {
           startBtn.style.display = 'inline-flex';
-          if (room.players.length < 2 && room.maxPlayers > 1) {
-            statusText.innerHTML = 'Você é o criador! Aguardando mais jogadores ou clique em <strong>"+ Simular Jogador"</strong> para testar agora.';
-          } else {
-            statusText.innerHTML = 'Tudo pronto! Quando todos estiverem na sala, clique em <strong>"Começar Partida"</strong>.';
-          }
+          statusText.innerHTML = players.length < 2 && room.maxPlayers > 1
+            ? 'Compartilhe o código ou o link de convite! Aguardando seus amigos entrarem<span class="pulse-dots"><span></span><span></span><span></span></span>'
+            : 'Tudo pronto! Clique em <strong>"Começar Partida"</strong> quando todos estiverem na sala.';
         } else {
           startBtn.style.display = 'none';
-          const host = room.players.find(p => p.id === room.hostId);
+          const host = players.find(p => p.id === room.hostId);
           statusText.innerHTML = `Aguardando <strong>${escapeHTML(host?.nick || 'o criador')}</strong> iniciar a partida<span class="pulse-dots"><span></span><span></span><span></span></span>`;
         }
       }
 
-      function renderGame(room) {
+      function renderGame(room, players) {
         const rd = room.roundData;
-        const viewerId = getViewerId(room);
-        const asker = room.players.find(p => p.id === rd.askerId);
-        const responder = room.players.find(p => p.id === rd.responderId);
+        if (!rd) return;
+
+        const asker = players.find(p => p.id === rd.askerId) || { nick: 'Desconectado' };
+        const responder = players.find(p => p.id === rd.responderId) || { nick: 'Desconectado' };
 
         document.getElementById('gameRoomCode').textContent = room.code;
         document.getElementById('gameRoundBadge').textContent = `RODADA #${rd.roundNum} • ♾️ INFINITA`;
 
-        // Renderiza avatares ao redor da arena
+        // Avatares em círculo
         const arena = document.getElementById('arenaWrapper');
         arena.querySelectorAll('.seat-node').forEach(n => n.remove());
 
-        const total = room.players.length;
-        const radiusPct = 39; // % do container
+        const total = players.length;
+        const radiusPct = 39;
 
-        room.players.forEach((p, idx) => {
+        players.forEach((p, idx) => {
           const angleDeg = (idx / total) * 360;
-          const angleRad = (angleDeg - 90) * (Math.PI / 180); // 0deg no topo
+          const angleRad = (angleDeg - 90) * (Math.PI / 180);
           const x = 50 + radiusPct * Math.cos(angleRad);
           const y = 50 + radiusPct * Math.sin(angleRad);
 
-          const node = document.createElement('div');
           let roleClass = '';
           let rolePill = '';
-
           if (rd.phase !== 'spinning') {
             if (p.id === rd.askerId) {
               roleClass = ' role-asker';
@@ -1821,6 +1664,7 @@
             }
           }
 
+          const node = document.createElement('div');
           node.className = 'seat-node' + roleClass;
           node.style.left = x + '%';
           node.style.top = y + '%';
@@ -1832,13 +1676,13 @@
           arena.appendChild(node);
         });
 
-        // Animação da Garrafa
+        // Giro sincronizado da garrafa
         const pivot = document.getElementById('bottlePivot');
         if (rd.phase === 'spinning' && session.lastSpinRoundRendered !== rd.roundNum) {
           session.lastSpinRoundRendered = rd.roundNum;
+          AudioFX.spin();
           pivot.style.transition = 'none';
           pivot.style.transform = `rotate(${session.bottleAngle}deg)`;
-          // Force reflow
           void pivot.offsetWidth;
           pivot.style.transition = 'transform 3.1s cubic-bezier(0.14, 0.85, 0.22, 1)';
           session.bottleAngle = rd.targetAngle;
@@ -1849,40 +1693,46 @@
           pivot.style.transform = `rotate(${rd.targetAngle}deg)`;
         }
 
-        // Matchup Banner
         const banner = document.getElementById('matchupBanner');
         if (rd.phase === 'spinning') {
           banner.style.display = 'none';
         } else {
           banner.style.display = 'grid';
-          document.getElementById('askerNameDisplay').textContent = asker ? asker.nick : '---';
-          document.getElementById('responderNameDisplay').textContent = responder ? responder.nick : '---';
+          document.getElementById('askerNameDisplay').textContent = asker.nick;
+          document.getElementById('responderNameDisplay').textContent = responder.nick;
         }
 
-        // Conteúdo da Fase
         const container = document.getElementById('gamePhaseContainer');
-        const isAsker = viewerId === rd.askerId;
-        const isResponder = viewerId === rd.responderId;
+        const isAsker = session.playerId === rd.askerId;
+        const isResponder = session.playerId === rd.responderId;
+        const isHost = session.playerId === room.hostId;
 
-        // FASE 1: GIRANDO A GARRAFA
+        // Evita re-renderizar formulário enquanto o usuário já está digitando no textarea!
+        const activeTag = document.activeElement?.id;
+        if ((rd.phase === 'asking' && isAsker && activeTag === 'questionInput') ||
+            (rd.phase === 'answering' && isResponder && activeTag === 'answerInput')) {
+          return;
+        }
+
+        // FASE 1: GIRANDO
         if (rd.phase === 'spinning') {
           container.innerHTML = `
             <div class="status-panel">
-              <h3 style="font-size:1.3rem; margin-bottom:8px;">🍾 Girando a garrafa do destino...</h3>
+              <h3 style="font-size:1.3rem; margin-bottom:8px;">🍾 Girando a garrafa ao vivo...</h3>
               <p style="color:var(--text-muted);">Sorteando quem será o <strong>Perguntador</strong> e o <strong>Respondedor</strong> desta rodada!</p>
             </div>
           `;
           return;
         }
 
-        // FASE 2: RESPONDEDOR ESCOLHE (VERDADE/DESAFIO + PORTA ABERTA/FECHADA)
+        // FASE 2: RESPONDEDOR ESCOLHE
         if (rd.phase === 'choosing') {
           if (isResponder) {
             container.innerHTML = `
               <div class="status-panel" style="text-align:left;">
-                <h3 style="text-align:center; margin-bottom:6px; color:var(--neon-pink);">🎯 É a sua vez, ${escapeHTML(responder.nick)}!</h3>
+                <h3 style="text-align:center; margin-bottom:6px; color:var(--neon-pink);">🎯 Sua vez, ${escapeHTML(responder.nick)}!</h3>
                 <p style="text-align:center; color:var(--text-muted); margin-bottom:18px; font-size:0.92rem;">
-                  Escolha entre <strong>Verdade</strong> ou <strong>Desafio</strong> e defina o estilo da porta:
+                  Escolha <strong>Verdade</strong> ou <strong>Desafio</strong> e o estilo da porta:
                 </p>
 
                 <label>1. Escolha o Tipo</label>
@@ -1904,12 +1754,12 @@
                   <button type="button" class="choice-btn ${session.selectedDoor === 'open' ? 'selected-open' : ''}" id="btnChooseOpen">
                     <span class="big-emoji">🚪</span>
                     <strong>Porta Aberta</strong>
-                    <span>Todos na sala veem a pergunta/desafio</span>
+                    <span>Todos veem a pergunta/desafio</span>
                   </button>
                   <button type="button" class="choice-btn ${session.selectedDoor === 'closed' ? 'selected-closed' : ''}" id="btnChooseClosed">
                     <span class="big-emoji">🔒</span>
                     <strong>Porta Fechada</strong>
-                    <span>Oculto! Só você vê e responde/cumpre</span>
+                    <span>Oculto! Só você vê e responde</span>
                   </button>
                 </div>
 
@@ -1919,35 +1769,18 @@
               </div>
             `;
 
-            document.getElementById('btnChooseTruth').onclick = () => {
-              session.selectedType = 'truth';
-              AudioFX.pop();
-              renderGame(room);
-            };
-            document.getElementById('btnChooseDare').onclick = () => {
-              session.selectedType = 'dare';
-              AudioFX.pop();
-              renderGame(room);
-            };
-            document.getElementById('btnChooseOpen').onclick = () => {
-              session.selectedDoor = 'open';
-              AudioFX.pop();
-              renderGame(room);
-            };
-            document.getElementById('btnChooseClosed').onclick = () => {
-              session.selectedDoor = 'closed';
-              AudioFX.pop();
-              renderGame(room);
-            };
-            document.getElementById('confirmChoiceBtn').onclick = () => {
+            document.getElementById('btnChooseTruth').onclick = () => { session.selectedType = 'truth'; AudioFX.pop(); renderGame(room, players); };
+            document.getElementById('btnChooseDare').onclick = () => { session.selectedType = 'dare'; AudioFX.pop(); renderGame(room, players); };
+            document.getElementById('btnChooseOpen').onclick = () => { session.selectedDoor = 'open'; AudioFX.pop(); renderGame(room, players); };
+            document.getElementById('btnChooseClosed').onclick = () => { session.selectedDoor = 'closed'; AudioFX.pop(); renderGame(room, players); };
+            document.getElementById('confirmChoiceBtn').onclick = async () => {
               if (!session.selectedType || !session.selectedDoor) return;
-              updateRoom(room.code, r => {
-                r.roundData.choiceType = session.selectedType;
-                r.roundData.doorType = session.selectedDoor;
-                r.roundData.phase = 'asking';
-              });
               AudioFX.fanfare();
-              renderCurrentRoom();
+              await RealtimeDB.updateRoomFields(room.code, {
+                'roundData/choiceType': session.selectedType,
+                'roundData/doorType': session.selectedDoor,
+                'roundData/phase': 'asking'
+              });
             };
           } else {
             container.innerHTML = `
@@ -1956,7 +1789,7 @@
                   ⏳ ESPERANDO <strong style="color:var(--neon-pink);">${escapeHTML(responder.nick)}</strong> escolher<span class="pulse-dots"><span></span><span></span><span></span></span>
                 </h3>
                 <p style="color:var(--text-muted);">
-                  ${isAsker ? 'Prepare sua criatividade! Assim que ele(a) escolher, você poderá enviar sua pergunta ou desafio.' : 'Aguarde o Respondedor decidir entre Verdade/Desafio e Porta Aberta/Fechada.'}
+                  ${isAsker ? 'Prepare sua pergunta ou desafio! Assim que ele(a) escolher, o campo aparecerá aqui.' : 'Aguardando o Respondedor definir Verdade/Desafio e Porta Aberta/Fechada.'}
                 </p>
               </div>
             `;
@@ -1964,10 +1797,9 @@
           return;
         }
 
-        // FASE 3: PERGUNTADOR DIGITA A PERGUNTA OU DESAFIO
+        // FASE 3: PERGUNTADOR DIGITA
         if (rd.phase === 'asking') {
           const typeLabel = rd.choiceType === 'truth' ? 'Verdade' : 'Desafio';
-          const doorLabel = rd.doorType === 'open' ? 'Porta Aberta' : 'Porta Fechada';
           const typeBadge = rd.choiceType === 'truth' ? 'badge-truth' : 'badge-dare';
           const doorBadge = rd.doorType === 'open' ? 'badge-open' : 'badge-closed';
 
@@ -1977,20 +1809,20 @@
               <div class="status-panel" style="text-align:left;">
                 <div class="tag-row">
                   <span class="badge ${typeBadge}">${rd.choiceType === 'truth' ? '💬 Verdade' : '🔥 Desafio'}</span>
-                  <span class="badge ${doorBadge}">${rd.doorType === 'open' ? '🚪 Porta Aberta (Pública)' : '🔒 Porta Fechada (Secreta)'}</span>
+                  <span class="badge ${doorBadge}">${rd.doorType === 'open' ? '🚪 Porta Aberta' : '🔒 Porta Fechada'}</span>
                 </div>
                 <h3 style="text-align:center; margin-bottom:14px;">
-                  🎤 Crie sua ${typeLabel} para <span style="color:var(--neon-pink);">${escapeHTML(responder.nick)}</span>!
+                  🎤 Envie sua ${typeLabel} para <span style="color:var(--neon-pink);">${escapeHTML(responder.nick)}</span>!
                 </h3>
 
-                <label>Sugestões Rápidas (opcional):</label>
+                <label>Sugestões Rápidas:</label>
                 <div class="quick-suggestions">
                   ${suggestions.map((s, i) => `<button type="button" class="suggestion-pill" data-idx="${i}">${escapeHTML(s)}</button>`).join('')}
                 </div>
 
                 <div class="form-group">
-                  <label for="questionInput">Digite sua pergunta ou desafio personalizado:</label>
-                  <textarea id="questionInput" placeholder="Escreva aqui..." maxlength="240"></textarea>
+                  <label for="questionInput">Sua pergunta ou desafio:</label>
+                  <textarea id="questionInput" placeholder="Digite aqui..." maxlength="240"></textarea>
                 </div>
 
                 <button class="btn btn-cyan btn-block" id="sendQuestionBtn">
@@ -2006,18 +1838,14 @@
               };
             });
 
-            document.getElementById('sendQuestionBtn').onclick = () => {
+            document.getElementById('sendQuestionBtn').onclick = async () => {
               const txt = document.getElementById('questionInput').value.trim();
-              if (!txt) {
-                showToast('⚠️ Digite uma pergunta ou desafio!');
-                return;
-              }
-              updateRoom(room.code, r => {
-                r.roundData.questionText = txt;
-                r.roundData.phase = 'answering';
-              });
+              if (!txt) { showToast('⚠️ Digite sua pergunta ou desafio!'); return; }
               AudioFX.fanfare();
-              renderCurrentRoom();
+              await RealtimeDB.updateRoomFields(room.code, {
+                'roundData/questionText': txt,
+                'roundData/phase': 'answering'
+              });
             };
           } else {
             container.innerHTML = `
@@ -2027,12 +1855,12 @@
                   <span class="badge ${doorBadge}">${rd.doorType === 'open' ? '🚪 Porta Aberta' : '🔒 Porta Fechada'}</span>
                 </div>
                 <h3 style="font-size:1.2rem; margin-bottom:8px;">
-                  ✍️ <strong>${escapeHTML(asker.nick)}</strong> está digitando a ${typeLabel}<span class="pulse-dots"><span></span><span></span><span></span></span>
+                  ✍️ <strong>${escapeHTML(asker.nick)}</strong> está escrevendo a ${typeLabel}<span class="pulse-dots"><span></span><span></span><span></span></span>
                 </h3>
                 <p style="color:var(--text-muted);">
                   ${rd.doorType === 'closed'
-                    ? (isResponder ? 'Como você escolheu Porta Fechada, somente você verá o conteúdo enviado!' : 'Como foi escolhida Porta Fechada, o conteúdo será secreto!')
-                    : 'Como foi escolhida Porta Aberta, todos na sala vão acompanhar!'}
+                    ? (isResponder ? 'Como você escolheu Porta Fechada, somente você verá o que for enviado!' : 'Porta Fechada ativa — conteúdo será privado.')
+                    : 'Porta Aberta ativa — todos na sala verão!'}
                 </p>
               </div>
             `;
@@ -2040,13 +1868,12 @@
           return;
         }
 
-        // FASE 4: RESPONDEDOR VÊ E RESPONDE / CUMPRE
+        // FASE 4: RESPONDEDOR RESPONDE / CUMPRE
         if (rd.phase === 'answering') {
           const isSecret = rd.doorType === 'closed';
           const typeBadge = rd.choiceType === 'truth' ? 'badge-truth' : 'badge-dare';
           const doorBadge = isSecret ? 'badge-closed' : 'badge-open';
 
-          // Se for Porta Fechada, APENAS o Respondedor vê o texto da pergunta/desafio!
           if (isResponder) {
             container.innerHTML = `
               <div class="prompt-reveal-box ${isSecret ? 'secret' : ''}">
@@ -2060,8 +1887,8 @@
 
               <div class="status-panel" style="text-align:left;">
                 <div class="form-group">
-                  <label for="answerInput">${rd.choiceType === 'truth' ? 'Sua Resposta:' : 'Confirme ou descreva como cumpriu o desafio:'}</label>
-                  <textarea id="answerInput" placeholder="${rd.choiceType === 'truth' ? 'Responda aqui...' : 'Ex: Desafio cumprido! Fiz na frente de todo mundo...'}" maxlength="260"></textarea>
+                  <label for="answerInput">${rd.choiceType === 'truth' ? 'Sua Resposta:' : 'Confirme ou descreva o cumprimento do desafio:'}</label>
+                  <textarea id="answerInput" placeholder="Escreva aqui..." maxlength="260"></textarea>
                 </div>
                 <button class="btn btn-green btn-block" id="submitAnswerBtn">
                   ${rd.choiceType === 'truth' ? 'Enviar Resposta ✅' : 'Marcar Desafio Cumprido 🔥'}
@@ -2069,21 +1896,16 @@
               </div>
             `;
 
-            document.getElementById('submitAnswerBtn').onclick = () => {
+            document.getElementById('submitAnswerBtn').onclick = async () => {
               const ans = document.getElementById('answerInput').value.trim();
-              if (!ans) {
-                showToast('⚠️ Escreva sua resposta ou confirmação!');
-                return;
-              }
-              updateRoom(room.code, r => {
-                r.roundData.answerText = ans;
-                r.roundData.phase = 'summary';
-              });
+              if (!ans) { showToast('⚠️ Escreva sua resposta!'); return; }
               AudioFX.fanfare();
-              renderCurrentRoom();
+              await RealtimeDB.updateRoomFields(room.code, {
+                'roundData/answerText': ans,
+                'roundData/phase': 'summary'
+              });
             };
           } else {
-            // Visão do Perguntador e demais jogadores
             if (isSecret) {
               container.innerHTML = `
                 <div class="prompt-reveal-box secret">
@@ -2094,8 +1916,8 @@
                   <div style="font-size:2.4rem; margin:8px 0;">🔐</div>
                   <h3 style="margin-bottom:6px;">Conteúdo Privado!</h3>
                   <p style="color:var(--text-muted);">
-                    Apenas <strong>${escapeHTML(responder.nick)}</strong> pode visualizar o que foi enviado.
-                    Aguardando resposta/cumprimento<span class="pulse-dots"><span></span><span></span><span></span></span>
+                    Apenas <strong>${escapeHTML(responder.nick)}</strong> vê a pergunta/desafio.
+                    Aguardando conclusão<span class="pulse-dots"><span></span><span></span><span></span></span>
                   </p>
                 </div>
               `;
@@ -2118,11 +1940,10 @@
           return;
         }
 
-        // FASE 5: RESUMO DA RODADA & REINÍCIO INFINITO DA ROLETA
+        // FASE 5: RESUMO & PRÓXIMA RODADA INFINITA
         if (rd.phase === 'summary') {
           const isSecret = rd.doorType === 'closed';
           const canSeeSecret = !isSecret || isResponder;
-          const canSpinNext = viewerId === room.hostId || isResponder || isAsker || room.players.some(p => p.id === viewerId && !p.isSim);
 
           container.innerHTML = `
             <div class="prompt-reveal-box ${isSecret ? 'secret' : ''}">
@@ -2135,63 +1956,45 @@
                 <small style="color:var(--text-muted);">Pergunta / Desafio:</small>
                 <div class="prompt-text" style="font-size:1.15rem;">“${escapeHTML(rd.questionText)}”</div>
                 <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.14);">
-                  <small style="color:var(--neon-green); font-weight:800; text-transform:uppercase;">Resposta / Cumprimento de ${escapeHTML(responder.nick)}:</small>
+                  <small style="color:var(--neon-green); font-weight:800; text-transform:uppercase;">Resposta de ${escapeHTML(responder.nick)}:</small>
                   <p style="font-size:1.15rem; font-weight:700; margin-top:6px; color:#fff;">${escapeHTML(rd.answerText)}</p>
                 </div>
               ` : `
                 <div style="font-size:2.2rem; margin:6px 0;">🤫</div>
-                <h3 style="color:var(--neon-gold); margin-bottom:6px;">Missão Concluída em Segredo!</h3>
+                <h3 style="color:var(--neon-gold); margin-bottom:6px;">Concluído em Segredo!</h3>
                 <p style="color:var(--text-muted);">
-                  <strong>${escapeHTML(responder.nick)}</strong> respondeu/cumpriu o desafio na <strong>Porta Fechada</strong>. O conteúdo permanece confidencial!
+                  <strong>${escapeHTML(responder.nick)}</strong> respondeu/cumpriu o desafio na <strong>Porta Fechada</strong>.
                 </p>
               `}
             </div>
 
-            ${canSpinNext ? `
+            ${(isHost || isResponder) ? `
               <button class="btn btn-gold btn-block" id="nextRoundBtn">
                 🍾 Girar Roleta para Próxima Rodada ♾️
               </button>
             ` : `
               <div class="status-panel" style="padding:14px;">
-                Aguardando iniciar a próxima rodada<span class="pulse-dots"><span></span><span></span><span></span></span>
+                Aguardando girar a roleta para a próxima rodada<span class="pulse-dots"><span></span><span></span><span></span></span>
               </div>
             `}
           `;
 
           const nextBtn = document.getElementById('nextRoundBtn');
           if (nextBtn) {
-            nextBtn.onclick = () => {
-              startNewRound(room.code);
-            };
+            nextBtn.onclick = () => startNewRound(room);
           }
         }
       }
 
-      // ==========================================================
-      // SINCRONIZAÇÃO ENTRE ABAS DO NAVEGADOR
-      // ==========================================================
-      if (channel) {
-        channel.onmessage = (e) => {
-          if (e.data?.type === 'SYNC_ROOMS' && e.data.sender !== session.tabPlayerId) {
-            if (session.currentScreen === 'screen-join') renderAvailableRooms();
-            if (session.roomCode) renderCurrentRoom();
-          }
-        };
-      }
-
-      window.addEventListener('storage', (e) => {
-        if (e.key === STORAGE_ROOMS_KEY) {
-          if (session.currentScreen === 'screen-join') renderAvailableRooms();
-          if (session.roomCode) renderCurrentRoom();
-        }
-      });
-
-      // Remove jogador real caso feche a aba
+      // Remove jogador ao fechar aba (no modo local ou fallback antes do onDisconnect)
       window.addEventListener('beforeunload', () => {
-        if (session.roomCode) {
-          leaveCurrentRoom();
+        if (session.roomCode && RealtimeDB.mode === 'local') {
+          RealtimeDB.leaveRoom(session.roomCode, session.playerId);
         }
       });
+
+      // Inicializa conexão ao carregar
+      RealtimeDB.init();
     })();
   </script>
 </body>
