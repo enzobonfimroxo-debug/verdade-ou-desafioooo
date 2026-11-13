@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Verdade ou Desafio — Multiplayer Online</title>
 
-  <!-- Firebase SDK (App + Realtime Database) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <!-- Biblioteca leve para comunicação em tempo real via WebSocket (sem cadastro/API key) -->
+  <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 
   <style>
     :root {
@@ -115,16 +114,11 @@
       gap: 6px;
       backdrop-filter: blur(10px);
     }
-
     .pill-info strong { color: var(--neon-cyan); }
 
-    .conn-pill {
-      cursor: pointer;
-      transition: 0.2s;
-    }
     .conn-pill.online { border-color: rgba(6, 214, 160, 0.5); color: #8ff7d7; }
-    .conn-pill.local { border-color: rgba(255, 209, 102, 0.5); color: var(--neon-gold); }
-    .conn-pill:hover { transform: translateY(-1px); background: rgba(255,255,255,0.1); }
+    .conn-pill.connecting { border-color: rgba(255, 209, 102, 0.5); color: var(--neon-gold); }
+    .conn-pill.offline { border-color: rgba(255, 77, 109, 0.5); color: #ff8fa3; }
 
     .icon-btn {
       background: var(--bg-glass);
@@ -221,7 +215,6 @@
 
     input[type="text"],
     input[type="password"],
-    input[type="url"],
     textarea {
       width: 100%;
       background: rgba(10, 6, 26, 0.78);
@@ -626,39 +619,6 @@
     }
     .suggestion-pill:hover { border-color: var(--neon-cyan); color: #fff; }
 
-    /* Modal de Configuração Firebase */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(5, 2, 16, 0.82);
-      backdrop-filter: blur(8px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      z-index: 90;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal-box {
-      width: 100%;
-      max-width: 560px;
-      background: #170f33;
-      border: 1.5px solid var(--neon-cyan);
-      border-radius: 20px;
-      padding: 26px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
-    }
-    .steps-box {
-      background: rgba(0,0,0,0.28);
-      border: 1px solid var(--border-glass);
-      border-radius: 12px;
-      padding: 12px 14px;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      line-height: 1.55;
-      margin-bottom: 16px;
-    }
-
     .toast {
       position: fixed;
       bottom: 24px;
@@ -697,13 +657,13 @@
   <header class="topbar">
     <div class="brand-mini">
       <span>🎯 Verdade ou Desafio</span>
-      <span class="brand-badge">MULTIPLAYER</span>
+      <span class="brand-badge">ONLINE</span>
     </div>
     <div class="topbar-controls">
-      <button class="pill-info conn-pill local" id="connStatusPill" title="Configurar Banco de Dados Online (Firebase)">
+      <div class="pill-info conn-pill connecting" id="connStatusPill">
         <span id="connDot">🟡</span>
-        <span id="connLabel">Configurar Online</span>
-      </button>
+        <span id="connLabel">Conectando...</span>
+      </div>
       <div class="pill-info" id="userBadge" style="display:none;">
         👤 <strong id="topNickDisplay"></strong>
       </div>
@@ -717,11 +677,7 @@
     <section class="screen active" id="screen-nick">
       <div class="card">
         <h1 class="show-title">Verdade ou Desafio</h1>
-        <p class="subtitle">Jogue online em tempo real com amigos em celulares e computadores diferentes!</p>
-
-        <div id="setupBanner" class="steps-box" style="display:none; border-color:rgba(255,209,102,0.45);">
-          ⚠️ <strong>Modo Online ainda não conectado:</strong> Para jogar entre dispositivos diferentes pela internet, conecte seu Firebase gratuito clicando em <strong style="color:var(--neon-cyan); cursor:pointer;" id="openConfigInline">⚙️ Configurar Online</strong> (leva 2 min). Sem configurar, funciona entre abas do mesmo navegador.
-        </div>
+        <p class="subtitle">Multiplayer online instantâneo — jogue com amigos em celulares e PCs diferentes!</p>
 
         <form id="nickForm">
           <div class="form-group">
@@ -837,7 +793,7 @@
           <h3 style="font-size:1.1rem;">👥 Jogadores Conectados</h3>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn btn-ghost" id="copyCodeBtn" style="padding:8px 14px; font-size:0.8rem;">📋 Copiar Código</button>
-            <button class="btn btn-cyan" id="copyInviteBtn" style="padding:8px 14px; font-size:0.8rem;">🔗 Copiar Link de Convite</button>
+            <button class="btn btn-cyan" id="copyInviteBtn" style="padding:8px 14px; font-size:0.8rem;">🔗 Copiar Link</button>
           </div>
         </div>
 
@@ -906,55 +862,12 @@
 
   </main>
 
-  <!-- MODAL DE CONFIGURAÇÃO DO FIREBASE -->
-  <div class="modal-backdrop" id="firebaseModal">
-    <div class="modal-box">
-      <h3 style="font-size:1.3rem; margin-bottom:10px; color:var(--neon-cyan);">🌐 Conectar Firebase Realtime Database</h3>
-      <div class="steps-box">
-        <strong>Passo a passo (100% gratuito):</strong><br/>
-        1. Crie um projeto no <strong>console.firebase.google.com</strong>.<br/>
-        2. Vá em <strong>Realtime Database → Criar banco de dados → Modo de teste</strong>.<br/>
-        3. Copie a URL do banco (ex: <code>https://meu-jogo-default-rtdb.firebaseio.com</code>) e cole abaixo!
-      </div>
-
-      <form id="firebaseConfigForm">
-        <div class="form-group">
-          <label for="fbUrlInput">Database URL do Firebase</label>
-          <input type="url" id="fbUrlInput" placeholder="https://seu-projeto-default-rtdb.firebaseio.com" required />
-        </div>
-        <div class="btn-row">
-          <button type="button" class="btn btn-ghost" id="closeFbModalBtn">Fechar</button>
-          <button type="submit" class="btn btn-green">Salvar e Conectar ⚡</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <div class="toast" id="toast"></div>
 
   <script>
     (() => {
       // =========================================================================
-      // 1. CONFIGURAÇÃO DO FIREBASE REALTIME DATABASE
-      // Cole aqui a URL do seu Firebase Realtime Database se quiser deixar fixa no HTML:
-      // =========================================================================
-      const DEFAULT_FIREBASE_CONFIG = {
-        databaseURL: "" // Ex: "https://meu-projeto-default-rtdb.firebaseio.com"
-      };
-
-      const LOCAL_FB_URL_KEY = 'vd_firebase_db_url_v1';
-      const LOCAL_ROOMS_KEY = 'vd_local_fallback_rooms_v1';
-
-      // Permite passar ?db=URL&room=1234 no link de convite!
-      const urlParams = new URLSearchParams(window.location.search);
-      const paramDb = urlParams.get('db');
-      const paramRoom = urlParams.get('room');
-      if (paramDb && paramDb.startsWith('https://')) {
-        localStorage.setItem(LOCAL_FB_URL_KEY, paramDb.trim());
-      }
-
-      // =========================================================================
-      // 2. ÁUDIO SINTETIZADO (WEB AUDIO API)
+      // 1. ÁUDIO SINTETIZADO (WEB AUDIO API)
       // =========================================================================
       const AudioFX = {
         enabled: true,
@@ -995,7 +908,7 @@
       };
 
       // =========================================================================
-      // 3. CONSTANTES & ESTADO DA SESSÃO
+      // 2. CONSTANTES & SESSÃO
       // =========================================================================
       const AVATAR_COLORS = [
         'linear-gradient(135deg, #ff2e93, #7209b7)',
@@ -1020,517 +933,269 @@
         'Imite um apresentador de TV vendendo um produto absurdo por 20 segundos.'
       ];
 
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramRoom = urlParams.get('room');
+
       const session = {
         playerId: 'p_' + Math.random().toString(36).slice(2, 10),
         nick: '',
         roomCode: null,
-        currentRoomData: null,
+        roomState: null,
         selectedType: null,
         selectedDoor: null,
         lastSpinRoundRendered: 0,
-        bottleAngle: 0,
-        unsubscribeRoom: null
+        bottleAngle: 0
       };
 
       // =========================================================================
-      // 4. CAMADA DE BANCO DE DADOS EM TEMPO REAL (FIREBASE + FALLBACK LOCAL)
+      // 3. MOTOR MULTIPLAYER EM TEMPO REAL VIA WEBSOCKET (MQTT OVER WSS PÚBLICO)
       // =========================================================================
-      const RealtimeDB = {
-        mode: 'local', // 'firebase' | 'local'
-        db: null,
-        dbUrl: '',
-        channel: ('BroadcastChannel' in window) ? new BroadcastChannel('vd_online_fallback') : null,
-        localWatcher: null,
+      const BROKERS = [
+        'wss://broker.emqx.io:8084/mqtt',
+        'wss://broker.hivemq.com:8884/mqtt'
+      ];
+      const TOPIC_PREFIX = 'vdshow_live_br_v3/rooms';
 
-        init() {
-          const savedUrl = DEFAULT_FIREBASE_CONFIG.databaseURL || localStorage.getItem(LOCAL_FB_URL_KEY) || '';
-          if (savedUrl && savedUrl.startsWith('https://') && typeof firebase !== 'undefined') {
-            try {
-              if (firebase.apps.length > 0) {
-                // Reaproveita ou reinicializa app se URL mudou
-                const currentApp = firebase.app();
-                if (currentApp.options.databaseURL !== savedUrl) {
-                  // Nome único para permitir trocar URL sem recarregar
-                  const appName = 'vd_' + Date.now();
-                  const app = firebase.initializeApp({ databaseURL: savedUrl }, appName);
-                  this.db = app.database();
-                } else {
-                  this.db = currentApp.database();
-                }
-              } else {
-                firebase.initializeApp({ databaseURL: savedUrl });
-                this.db = firebase.database();
-              }
-              this.dbUrl = savedUrl.replace(/\/+$/, '');
-              this.mode = 'firebase';
-            } catch (err) {
-              console.error('Erro ao conectar Firebase:', err);
-              this.mode = 'local';
-            }
-          } else {
-            this.mode = 'local';
+      const Network = {
+        client: null,
+        brokerIndex: 0,
+        connected: false,
+        listeners: new Map(), // topic -> callback(payload)
+
+        connect() {
+          if (typeof mqtt === 'undefined') {
+            this.setStatus('offline', 'Erro ao carregar rede');
+            return;
           }
-          this.updateConnectionUI();
+
+          const url = BROKERS[this.brokerIndex];
+          this.setStatus('connecting', 'Conectando online...');
+
+          if (this.client) {
+            try { this.client.end(true); } catch {}
+          }
+
+          const client = mqtt.connect(url, {
+            clientId: 'vd_' + session.playerId + '_' + Math.floor(Math.random() * 1000),
+            clean: true,
+            connectTimeout: 7000,
+            reconnectPeriod: 3000,
+            keepalive: 25
+          });
+
+          this.client = client;
+
+          // Se demorar no primeiro broker, troca automaticamente para o secundário
+          const fallbackTimer = setTimeout(() => {
+            if (!this.connected && this.brokerIndex < BROKERS.length - 1) {
+              this.brokerIndex++;
+              this.connect();
+            }
+          }, 6500);
+
+          client.on('connect', () => {
+            clearTimeout(fallbackTimer);
+            this.connected = true;
+            this.setStatus('online', 'Online (Tempo Real)');
+            // Reassina tópicos ativos caso tenha reconectado
+            for (const topic of this.listeners.keys()) {
+              client.subscribe(topic, { qos: 1 });
+            }
+          });
+
+          client.on('reconnect', () => {
+            this.connected = false;
+            this.setStatus('connecting', 'Reconectando...');
+          });
+
+          client.on('offline', () => {
+            this.connected = false;
+            this.setStatus('offline', 'Desconectado');
+          });
+
+          client.on('error', () => {
+            this.connected = false;
+          });
+
+          client.on('message', (topic, msgBuffer) => {
+            let parsed = null;
+            try {
+              parsed = JSON.parse(msgBuffer.toString());
+            } catch {
+              return;
+            }
+            const cb = this.listeners.get(topic);
+            if (cb) cb(parsed);
+          });
         },
 
-        updateConnectionUI() {
+        setStatus(type, text) {
           const pill = document.getElementById('connStatusPill');
           const dot = document.getElementById('connDot');
           const label = document.getElementById('connLabel');
-          const banner = document.getElementById('setupBanner');
+          pill.className = 'pill-info conn-pill ' + type;
+          dot.textContent = type === 'online' ? '🟢' : (type === 'connecting' ? '🟡' : '🔴');
+          label.textContent = text;
+        },
 
-          if (this.mode === 'firebase') {
-            pill.className = 'pill-info conn-pill online';
-            dot.textContent = '🟢';
-            label.textContent = 'Online (Firebase)';
-            banner.style.display = 'none';
-          } else {
-            pill.className = 'pill-info conn-pill local';
-            dot.textContent = '🟡';
-            label.textContent = 'Configurar Online';
-            banner.style.display = 'block';
+        subscribe(topic, callback) {
+          this.listeners.set(topic, callback);
+          if (this.client && this.connected) {
+            this.client.subscribe(topic, { qos: 1 });
           }
         },
 
-        async roomExists(code) {
-          if (this.mode === 'firebase') {
-            const snap = await this.db.ref(`rooms/${code}`).once('value');
-            return snap.exists();
-          }
-          const rooms = this._getLocalRooms();
-          return Boolean(rooms[code]);
-        },
-
-        async getRoomOnce(code) {
-          if (this.mode === 'firebase') {
-            const snap = await this.db.ref(`rooms/${code}`).once('value');
-            return snap.val();
-          }
-          return this._getLocalRooms()[code] || null;
-        },
-
-        async createRoom(roomObj, hostPlayer) {
-          const payload = {
-            ...roomObj,
-            players: {
-              [hostPlayer.id]: hostPlayer
-            }
-          };
-
-          if (this.mode === 'firebase') {
-            const roomRef = this.db.ref(`rooms/${roomObj.code}`);
-            await roomRef.set(payload);
-            // Remove jogador automaticamente se perder conexão / fechar navegador
-            this.db.ref(`rooms/${roomObj.code}/players/${hostPlayer.id}`).onDisconnect().remove();
-            return payload;
-          } else {
-            const rooms = this._getLocalRooms();
-            rooms[roomObj.code] = payload;
-            this._saveLocalRooms(rooms);
-            return payload;
+        unsubscribe(topic) {
+          this.listeners.delete(topic);
+          if (this.client && this.connected) {
+            this.client.unsubscribe(topic);
           }
         },
 
-        async joinRoom(code, password, playerObj) {
-          if (this.mode === 'firebase') {
-            const roomRef = this.db.ref(`rooms/${code}`);
-            const snap = await roomRef.once('value');
-            const room = snap.val();
-
-            if (!room) throw new Error('ROOM_NOT_FOUND');
-            if (room.password && room.password !== password) throw new Error('WRONG_PASSWORD');
-
-            const playersMap = room.players || {};
-            const count = Object.keys(playersMap).length;
-            if (!playersMap[playerObj.id] && count >= room.maxPlayers) {
-              throw new Error('ROOM_FULL');
-            }
-
-            playerObj.color = AVATAR_COLORS[count % AVATAR_COLORS.length];
-            const playerRef = this.db.ref(`rooms/${code}/players/${playerObj.id}`);
-            await playerRef.set(playerObj);
-            playerRef.onDisconnect().remove();
-            return;
-          } else {
-            const rooms = this._getLocalRooms();
-            const room = rooms[code];
-            if (!room) throw new Error('ROOM_NOT_FOUND');
-            if (room.password && room.password !== password) throw new Error('WRONG_PASSWORD');
-            room.players = room.players || {};
-            const count = Object.keys(room.players).length;
-            if (!room.players[playerObj.id] && count >= room.maxPlayers) throw new Error('ROOM_FULL');
-            playerObj.color = AVATAR_COLORS[count % AVATAR_COLORS.length];
-            room.players[playerObj.id] = playerObj;
-            this._saveLocalRooms(rooms);
-          }
+        publish(topic, data, retain = false) {
+          if (!this.client || !this.connected) return false;
+          this.client.publish(topic, JSON.stringify(data), { qos: 1, retain });
+          return true;
         },
 
-        async updateRoomFields(code, updates) {
-          if (this.mode === 'firebase') {
-            await this.db.ref(`rooms/${code}`).update(updates);
-          } else {
-            const rooms = this._getLocalRooms();
-            if (!rooms[code]) return;
-            Object.entries(updates).forEach(([path, val]) => {
-              this._setByPath(rooms[code], path, val);
+        // Consulta rápida para verificar se uma sala já existe ativa
+        checkRetainedState(code, timeoutMs = 1100) {
+          return new Promise((resolve) => {
+            const topic = `${TOPIC_PREFIX}/${code}/state`;
+            let settled = false;
+            const timer = setTimeout(() => {
+              if (!settled) {
+                settled = true;
+                this.unsubscribe(topic);
+                resolve(null);
+              }
+            }, timeoutMs);
+
+            this.subscribe(topic, (data) => {
+              if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                this.unsubscribe(topic);
+                // Ignora salas deletadas ou muito antigas (+ de 6h)
+                if (!data || data.deleted || (Date.now() - (data.updatedAt || 0) > 6 * 3600 * 1000)) {
+                  resolve(null);
+                } else {
+                  resolve(data);
+                }
+              }
             });
-            this._saveLocalRooms(rooms);
-          }
-        },
-
-        async leaveRoom(code, playerId) {
-          if (!code || !playerId) return;
-          if (this.mode === 'firebase') {
-            const pRef = this.db.ref(`rooms/${code}/players/${playerId}`);
-            try { await pRef.onDisconnect().cancel(); } catch {}
-            await pRef.remove();
-
-            // Verifica se a sala ficou vazia para limpar ou transferir host
-            const roomSnap = await this.db.ref(`rooms/${code}`).once('value');
-            const room = roomSnap.val();
-            if (room) {
-              const remaining = Object.values(room.players || {});
-              if (remaining.length === 0) {
-                await this.db.ref(`rooms/${code}`).remove();
-              } else if (room.hostId === playerId) {
-                remaining.sort((a, b) => a.joinedAt - b.joinedAt);
-                await this.db.ref(`rooms/${code}/hostId`).set(remaining[0].id);
-              }
-            }
-          } else {
-            const rooms = this._getLocalRooms();
-            const room = rooms[code];
-            if (room && room.players) {
-              delete room.players[playerId];
-              const remaining = Object.values(room.players);
-              if (remaining.length === 0) {
-                delete rooms[code];
-              } else if (room.hostId === playerId) {
-                remaining.sort((a, b) => a.joinedAt - b.joinedAt);
-                room.hostId = remaining[0].id;
-              }
-              this._saveLocalRooms(rooms);
-            }
-          }
-        },
-
-        subscribeRoom(code, callback) {
-          if (this.mode === 'firebase') {
-            const roomRef = this.db.ref(`rooms/${code}`);
-            const handler = (snap) => callback(snap.val());
-            roomRef.on('value', handler);
-            return () => roomRef.off('value', handler);
-          } else {
-            const handler = () => callback(this._getLocalRooms()[code] || null);
-            const onMsg = (e) => { if (e.data?.code === code) handler(); };
-            const onStorage = (e) => { if (e.key === LOCAL_ROOMS_KEY) handler(); };
-            if (this.channel) this.channel.addEventListener('message', onMsg);
-            window.addEventListener('storage', onStorage);
-            this.localWatcher = handler;
-            handler();
-            return () => {
-              if (this.channel) this.channel.removeEventListener('message', onMsg);
-              window.removeEventListener('storage', onStorage);
-              this.localWatcher = null;
-            };
-          }
-        },
-
-        // Helpers Local Fallback
-        _getLocalRooms() {
-          try { return JSON.parse(localStorage.getItem(LOCAL_ROOMS_KEY)) || {}; } catch { return {}; }
-        },
-        _saveLocalRooms(rooms) {
-          localStorage.setItem(LOCAL_ROOMS_KEY, JSON.stringify(rooms));
-          if (this.channel) this.channel.postMessage({ code: session.roomCode });
-          if (this.localWatcher) this.localWatcher();
-        },
-        _setByPath(obj, path, value) {
-          const parts = path.split('/');
-          let cur = obj;
-          for (let i = 0; i < parts.length - 1; i++) {
-            if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
-            cur = cur[parts[i]];
-          }
-          cur[parts[parts.length - 1]] = value;
+          });
         }
       };
 
       // =========================================================================
-      // 5. UTILITÁRIOS DE UI
+      // 4. LÓGICA DE SALA & SINCRONIZAÇÃO HOST-AUTORITATIVA
       // =========================================================================
-      function showToast(msg) {
-        const el = document.getElementById('toast');
-        el.textContent = msg;
-        el.classList.add('show');
-        clearTimeout(el._timer);
-        el._timer = setTimeout(() => el.classList.remove('show'), 3000);
+      function topicState(code) { return `${TOPIC_PREFIX}/${code}/state`; }
+      function topicActions(code) { return `${TOPIC_PREFIX}/${code}/actions`; }
+      function topicReply(code, playerId) { return `${TOPIC_PREFIX}/${code}/reply/${playerId}`; }
+
+      function publishRoomState(room) {
+        room.updatedAt = Date.now();
+        room.version = (room.version || 0) + 1;
+        session.roomState = room;
+        Network.publish(topicState(room.code), room, true);
+        handleStateUpdate(room);
       }
 
-      function showScreen(id) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-      }
+      // Apenas o Host atual processa ações recebidas no canal da sala
+      function handleHostIncomingAction(msg) {
+        const room = session.roomState;
+        if (!room || room.hostId !== session.playerId) return;
 
-      function escapeHTML(str) {
-        return String(str).replace(/[&<>"']/g, m => ({
-          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-        }[m]));
-      }
+        // 1. Pedido de entrada na sala
+        if (msg.type === 'JOIN') {
+          const { player, password, reqId } = msg;
+          if (!player || !player.id) return;
 
-      function getSortedPlayers(room) {
-        if (!room || !room.players) return [];
-        return Object.values(room.players).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
-      }
-
-      // =========================================================================
-      // 6. MODAL DE CONFIGURAÇÃO FIREBASE
-      // =========================================================================
-      const fbModal = document.getElementById('firebaseModal');
-      const openFbModal = () => {
-        document.getElementById('fbUrlInput').value = RealtimeDB.dbUrl || localStorage.getItem(LOCAL_FB_URL_KEY) || '';
-        fbModal.classList.add('open');
-      };
-
-      document.getElementById('connStatusPill').onclick = openFbModal;
-      document.getElementById('openConfigInline').onclick = openFbModal;
-      document.getElementById('closeFbModalBtn').onclick = () => fbModal.classList.remove('open');
-
-      document.getElementById('firebaseConfigForm').addEventListener('submit', e => {
-        e.preventDefault();
-        let url = document.getElementById('fbUrlInput').value.trim();
-        if (!url.startsWith('https://')) {
-          showToast('❌ A URL precisa começar com https://');
-          return;
-        }
-        url = url.replace(/\/+$/, '');
-        localStorage.setItem(LOCAL_FB_URL_KEY, url);
-        RealtimeDB.init();
-        fbModal.classList.remove('open');
-        if (RealtimeDB.mode === 'firebase') {
-          AudioFX.fanfare();
-          showToast('🟢 Conectado ao Firebase Realtime Database!');
-        } else {
-          showToast('❌ Não foi possível conectar. Verifique a URL.');
-        }
-      });
-
-      // =========================================================================
-      // 7. NAVEGAÇÃO & TELAS INICIAIS
-      // =========================================================================
-      document.getElementById('soundToggleBtn').onclick = () => {
-        AudioFX.enabled = !AudioFX.enabled;
-        document.getElementById('soundToggleBtn').textContent = AudioFX.enabled ? '🔊 Som' : '🔇 Mudo';
-      };
-
-      document.getElementById('nickForm').addEventListener('submit', e => {
-        e.preventDefault();
-        const nick = document.getElementById('nickInput').value.trim();
-        if (!nick) return;
-        session.nick = nick;
-        document.getElementById('topNickDisplay').textContent = nick;
-        document.getElementById('menuNick').textContent = nick;
-        document.getElementById('userBadge').style.display = 'flex';
-        AudioFX.pop();
-
-        // Se veio por link de convite com ?room=XXXX, já direciona para entrar!
-        if (paramRoom && /^\d{4}$/.test(paramRoom)) {
-          document.getElementById('joinCodeInput').value = paramRoom;
-          showScreen('screen-join');
-          showToast(`Código ${paramRoom} preenchido! Clique em Entrar.`);
-        } else {
-          showScreen('screen-menu');
-        }
-      });
-
-      document.getElementById('changeNickBtn').onclick = () => showScreen('screen-nick');
-      document.getElementById('goCreateBtn').onclick = () => { AudioFX.pop(); showScreen('screen-create'); };
-      document.getElementById('goJoinBtn').onclick = () => { AudioFX.pop(); showScreen('screen-join'); };
-      document.getElementById('backFromCreateBtn').onclick = () => showScreen('screen-menu');
-      document.getElementById('backFromJoinBtn').onclick = () => showScreen('screen-menu');
-
-      const maxRange = document.getElementById('maxPlayersRange');
-      const maxVal = document.getElementById('maxPlayersVal');
-      maxRange.addEventListener('input', () => { maxVal.textContent = maxRange.value; });
-
-      // =========================================================================
-      // 8. CRIAR SALA & ENTRAR EM SALA (SINCRONIZADO)
-      // =========================================================================
-      async function generateUniqueRoomCode() {
-        for (let i = 0; i < 15; i++) {
-          const code = String(Math.floor(1000 + Math.random() * 9000));
-          const exists = await RealtimeDB.roomExists(code);
-          if (!exists) return code;
-        }
-        return String(Math.floor(1000 + Math.random() * 9000));
-      }
-
-      document.getElementById('createRoomForm').addEventListener('submit', async e => {
-        e.preventDefault();
-        const btn = document.getElementById('createRoomSubmitBtn');
-        btn.disabled = true;
-        btn.textContent = 'Criando sala...';
-
-        try {
-          const password = document.getElementById('roomPassInput').value.trim();
-          const maxPlayers = parseInt(maxRange.value, 10);
-          const code = await generateUniqueRoomCode();
-
-          const hostPlayer = {
-            id: session.playerId,
-            nick: session.nick,
-            color: AVATAR_COLORS[0],
-            joinedAt: Date.now()
-          };
-
-          const roomObj = {
-            code,
-            password,
-            maxPlayers,
-            hostId: hostPlayer.id,
-            status: 'lobby',
-            round: 0,
-            createdAt: Date.now()
-          };
-
-          await RealtimeDB.createRoom(roomObj, hostPlayer);
-          connectToRoomRealtime(code);
-          AudioFX.fanfare();
-          showToast(`Sala #${code} criada ao vivo!`);
-        } catch (err) {
-          console.error(err);
-          showToast('❌ Erro ao criar sala. Verifique sua conexão ou regras do Firebase.');
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Gerar Código e Criar Sala 🎉';
-        }
-      });
-
-      document.getElementById('joinRoomForm').addEventListener('submit', async e => {
-        e.preventDefault();
-        const code = document.getElementById('joinCodeInput').value.trim();
-        const pass = document.getElementById('joinPassInput').value.trim();
-        const btn = document.getElementById('joinRoomSubmitBtn');
-        btn.disabled = true;
-        btn.textContent = 'Conectando...';
-
-        try {
-          const playerObj = {
-            id: session.playerId,
-            nick: session.nick,
-            color: AVATAR_COLORS[0],
-            joinedAt: Date.now()
-          };
-
-          await RealtimeDB.joinRoom(code, pass, playerObj);
-          connectToRoomRealtime(code);
-          AudioFX.fanfare();
-          showToast(`Você entrou na sala #${code}!`);
-        } catch (err) {
-          if (err.message === 'ROOM_NOT_FOUND') showToast('❌ Sala não encontrada! Confira o código.');
-          else if (err.message === 'WRONG_PASSWORD') showToast('🔒 Senha incorreta!');
-          else if (err.message === 'ROOM_FULL') showToast('⚠️ Sala cheia!');
-          else {
-            console.error(err);
-            showToast('❌ Erro ao entrar na sala.');
-          }
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Entrar na Sala 🚪';
-        }
-      });
-
-      function connectToRoomRealtime(code) {
-        if (session.unsubscribeRoom) session.unsubscribeRoom();
-        session.roomCode = code;
-        session.lastSpinRoundRendered = 0;
-
-        session.unsubscribeRoom = RealtimeDB.subscribeRoom(code, (room) => {
-          session.currentRoomData = room;
-
-          if (!room) {
-            if (session.roomCode) {
-              disconnectFromRoomLocal();
-              showToast('A sala foi encerrada.');
-              showScreen('screen-menu');
-            }
+          if (room.password && room.password !== (password || '')) {
+            Network.publish(topicReply(room.code, player.id), { reqId, ok: false, error: 'WRONG_PASSWORD' });
             return;
           }
 
-          // Garante que existe um host válido caso o criador tenha caído abruptamente
-          const players = getSortedPlayers(room);
-          if (players.length > 0 && !players.some(p => p.id === room.hostId)) {
-            if (players[0].id === session.playerId) {
-              RealtimeDB.updateRoomFields(room.code, { hostId: session.playerId });
-            }
+          const exists = room.players.some(p => p.id === player.id);
+          if (!exists && room.players.length >= room.maxPlayers) {
+            Network.publish(topicReply(room.code, player.id), { reqId, ok: false, error: 'ROOM_FULL' });
+            return;
           }
 
-          if (room.status === 'lobby') {
-            showScreen('screen-lobby');
-            renderLobby(room, players);
-          } else if (room.status === 'playing') {
-            showScreen('screen-game');
-            renderGame(room, players);
+          if (!exists) {
+            player.color = AVATAR_COLORS[room.players.length % AVATAR_COLORS.length];
+            room.players.push(player);
           }
-        });
-      }
 
-      function disconnectFromRoomLocal() {
-        if (session.unsubscribeRoom) {
-          session.unsubscribeRoom();
-          session.unsubscribeRoom = null;
-        }
-        session.roomCode = null;
-        session.currentRoomData = null;
-        session.lastSpinRoundRendered = 0;
-      }
-
-      async function handleLeaveRoom() {
-        const code = session.roomCode;
-        disconnectFromRoomLocal();
-        showScreen('screen-menu');
-        if (code) {
-          await RealtimeDB.leaveRoom(code, session.playerId);
-        }
-      }
-
-      document.getElementById('leaveLobbyBtn').onclick = handleLeaveRoom;
-      document.getElementById('leaveGameBtn').onclick = handleLeaveRoom;
-
-      // Copiar código e link de convite
-      document.getElementById('copyCodeBtn').onclick = () => {
-        if (!session.roomCode) return;
-        navigator.clipboard?.writeText(session.roomCode).catch(() => {});
-        showToast(`Código ${session.roomCode} copiado!`);
-      };
-
-      document.getElementById('copyInviteBtn').onclick = () => {
-        if (!session.roomCode) return;
-        const base = window.location.href.split('?')[0];
-        const params = new URLSearchParams();
-        params.set('room', session.roomCode);
-        if (RealtimeDB.dbUrl) params.set('db', RealtimeDB.dbUrl);
-        const fullLink = `${base}?${params.toString()}`;
-        navigator.clipboard?.writeText(fullLink).catch(() => {});
-        showToast('🔗 Link de convite copiado! Envie para seus amigos.');
-      };
-
-      // =========================================================================
-      // 9. INICIAR PARTIDA & SORTEIO SINCRONIZADO DA ROLETA
-      // =========================================================================
-      document.getElementById('startMatchBtn').onclick = () => {
-        const room = session.currentRoomData;
-        if (!room) return;
-        const players = getSortedPlayers(room);
-        if (players.length < 2 && room.maxPlayers > 1) {
-          showToast('⚠️ Aguarde pelo menos 2 jogadores entrarem na sala!');
+          Network.publish(topicReply(room.code, player.id), { reqId, ok: true });
+          publishRoomState(room);
           return;
         }
-        startNewRound(room);
-      };
 
-      async function startNewRound(room) {
-        const players = getSortedPlayers(room);
+        // 2. Jogador saindo da sala
+        if (msg.type === 'LEAVE') {
+          const leavingId = msg.playerId;
+          room.players = room.players.filter(p => p.id !== leavingId);
+          if (room.players.length === 0) {
+            Network.publish(topicState(room.code), { deleted: true }, true);
+          } else {
+            if (room.hostId === leavingId) {
+              room.hostId = room.players[0].id;
+            }
+            publishRoomState(room);
+          }
+          return;
+        }
+
+        // 3. Jogador escolheu Verdade/Desafio + Porta Aberta/Fechada
+        if (msg.type === 'CHOOSE' && room.roundData?.phase === 'choosing') {
+          if (msg.playerId !== room.roundData.responderId) return;
+          room.roundData.choiceType = msg.choiceType;
+          room.roundData.doorType = msg.doorType;
+          room.roundData.phase = 'asking';
+          publishRoomState(room);
+          return;
+        }
+
+        // 4. Perguntador enviou pergunta ou desafio
+        if (msg.type === 'ASK' && room.roundData?.phase === 'asking') {
+          if (msg.playerId !== room.roundData.askerId) return;
+          room.roundData.questionText = msg.questionText;
+          room.roundData.phase = 'answering';
+          publishRoomState(room);
+          return;
+        }
+
+        // 5. Respondedor respondeu ou cumpriu desafio
+        if (msg.type === 'ANSWER' && room.roundData?.phase === 'answering') {
+          if (msg.playerId !== room.roundData.responderId) return;
+          room.roundData.answerText = msg.answerText;
+          room.roundData.phase = 'summary';
+          publishRoomState(room);
+          return;
+        }
+
+        // 6. Próxima rodada
+        if (msg.type === 'NEXT_ROUND' && room.roundData?.phase === 'summary') {
+          triggerNewRoundOnHost(room);
+        }
+      }
+
+      function sendAction(actionObj) {
+        if (!session.roomCode) return;
+        const room = session.roomState;
+        // Se eu sou o host, processo localmente na hora para resposta instantânea
+        if (room && room.hostId === session.playerId) {
+          handleHostIncomingAction(actionObj);
+        } else {
+          Network.publish(topicActions(session.roomCode), actionObj, false);
+        }
+      }
+
+      function triggerNewRoundOnHost(room) {
+        const players = room.players;
         if (!players.length) return;
 
         const askerIdx = Math.floor(Math.random() * players.length);
@@ -1550,47 +1215,340 @@
         const nextBase = currentBase - (currentBase % 360) + extraSpins + responderAngle;
         const nextRound = (room.round || 0) + 1;
 
-        session.selectedType = null;
-        session.selectedDoor = null;
+        room.status = 'playing';
+        room.round = nextRound;
+        room.roundData = {
+          roundNum: nextRound,
+          phase: 'spinning',
+          askerId: asker.id,
+          responderId: responder.id,
+          targetAngle: nextBase,
+          spinEndsAt: Date.now() + 3300,
+          choiceType: '',
+          doorType: '',
+          questionText: '',
+          answerText: ''
+        };
 
-        await RealtimeDB.updateRoomFields(room.code, {
-          status: 'playing',
-          round: nextRound,
-          roundData: {
-            roundNum: nextRound,
-            phase: 'spinning',
-            askerId: asker.id,
-            responderId: responder.id,
-            targetAngle: nextBase,
-            spinEndsAt: Date.now() + 3300,
-            choiceType: '',
-            doorType: '',
-            questionText: '',
-            answerText: ''
-          }
-        });
+        publishRoomState(room);
       }
 
-      // Timer sincronizado: o host promove de 'spinning' -> 'choosing' quando o tempo do giro termina
+      // Timer para o Host encerrar o giro da roleta após 3.3s
       setInterval(() => {
-        const room = session.currentRoomData;
-        if (!room || room.status !== 'playing' || !room.roundData) return;
-        const rd = room.roundData;
-
-        if (rd.phase === 'spinning' && Date.now() >= rd.spinEndsAt) {
-          if (room.hostId === session.playerId) {
-            RealtimeDB.updateRoomFields(room.code, {
-              'roundData/phase': 'choosing'
-            });
+        const room = session.roomState;
+        if (!room || room.hostId !== session.playerId) return;
+        if (room.status === 'playing' && room.roundData?.phase === 'spinning') {
+          if (Date.now() >= room.roundData.spinEndsAt) {
+            room.roundData.phase = 'choosing';
+            publishRoomState(room);
           }
         }
-      }, 300);
+      }, 250);
 
       // =========================================================================
-      // 10. RENDERIZAÇÃO DO LOBBY & GAMEPLAY
+      // 5. UTILITÁRIOS DE UI
       // =========================================================================
-      function renderLobby(room, players) {
+      function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => el.classList.remove('show'), 3200);
+      }
+
+      function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+      }
+
+      function escapeHTML(str) {
+        return String(str).replace(/[&<>"']/g, m => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[m]));
+      }
+
+      // =========================================================================
+      // 6. NAVEGAÇÃO & FLUXOS DE TELA
+      // =========================================================================
+      document.getElementById('soundToggleBtn').onclick = () => {
+        AudioFX.enabled = !AudioFX.enabled;
+        document.getElementById('soundToggleBtn').textContent = AudioFX.enabled ? '🔊 Som' : '🔇 Mudo';
+      };
+
+      document.getElementById('nickForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const nick = document.getElementById('nickInput').value.trim();
+        if (!nick) return;
+        session.nick = nick;
+        document.getElementById('topNickDisplay').textContent = nick;
+        document.getElementById('menuNick').textContent = nick;
+        document.getElementById('userBadge').style.display = 'flex';
+        AudioFX.pop();
+
+        if (paramRoom && /^\d{4}$/.test(paramRoom)) {
+          document.getElementById('joinCodeInput').value = paramRoom;
+          showScreen('screen-join');
+          showToast(`Código ${paramRoom} preenchido! Clique em Entrar.`);
+        } else {
+          showScreen('screen-menu');
+        }
+      });
+
+      document.getElementById('changeNickBtn').onclick = () => showScreen('screen-nick');
+      document.getElementById('goCreateBtn').onclick = () => { AudioFX.pop(); showScreen('screen-create'); };
+      document.getElementById('goJoinBtn').onclick = () => { AudioFX.pop(); showScreen('screen-join'); };
+      document.getElementById('backFromCreateBtn').onclick = () => showScreen('screen-menu');
+      document.getElementById('backFromJoinBtn').onclick = () => showScreen('screen-menu');
+
+      const maxRange = document.getElementById('maxPlayersRange');
+      const maxVal = document.getElementById('maxPlayersVal');
+      maxRange.addEventListener('input', () => { maxVal.textContent = maxRange.value; });
+
+      // CRIAR SALA
+      document.getElementById('createRoomForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!Network.connected) {
+          showToast('⏳ Aguarde a conexão online ficar verde no topo!');
+          return;
+        }
+
+        const btn = document.getElementById('createRoomSubmitBtn');
+        btn.disabled = true;
+        btn.textContent = 'Gerando código...';
+
+        try {
+          let code = '';
+          for (let attempt = 0; attempt < 6; attempt++) {
+            const candidate = String(Math.floor(1000 + Math.random() * 9000));
+            const existing = await Network.checkRetainedState(candidate, 750);
+            if (!existing) {
+              code = candidate;
+              break;
+            }
+          }
+          if (!code) code = String(Math.floor(1000 + Math.random() * 9000));
+
+          const password = document.getElementById('roomPassInput').value.trim();
+          const maxPlayers = parseInt(maxRange.value, 10);
+
+          const hostPlayer = {
+            id: session.playerId,
+            nick: session.nick,
+            color: AVATAR_COLORS[0]
+          };
+
+          const room = {
+            code,
+            password,
+            maxPlayers,
+            hostId: hostPlayer.id,
+            status: 'lobby',
+            round: 0,
+            players: [hostPlayer],
+            roundData: null,
+            version: 1,
+            updatedAt: Date.now()
+          };
+
+          session.roomCode = code;
+          session.lastSpinRoundRendered = 0;
+
+          // Inscreve como Host para receber ações de todos os dispositivos
+          Network.subscribe(topicActions(code), handleHostIncomingAction);
+          Network.subscribe(topicState(code), (incoming) => {
+            if (!incoming || incoming.deleted) return;
+            // Mantém o estado local atualizado se versão for maior
+            if (!session.roomState || incoming.version > session.roomState.version) {
+              session.roomState = incoming;
+              handleStateUpdate(incoming);
+            }
+          });
+
+          publishRoomState(room);
+          AudioFX.fanfare();
+          showToast(`Sala #${code} criada online!`);
+        } catch (err) {
+          console.error(err);
+          showToast('❌ Erro ao criar sala. Tente novamente.');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Gerar Código e Criar Sala 🎉';
+        }
+      });
+
+      // ENTRAR EM SALA
+      document.getElementById('joinRoomForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        if (!Network.connected) {
+          showToast('⏳ Aguarde a conexão online ficar verde no topo!');
+          return;
+        }
+
+        const code = document.getElementById('joinCodeInput').value.trim();
+        const pass = document.getElementById('joinPassInput').value.trim();
+        if (!/^\d{4}$/.test(code)) {
+          showToast('⚠️ Digite um código válido de 4 dígitos.');
+          return;
+        }
+
+        const btn = document.getElementById('joinRoomSubmitBtn');
+        btn.disabled = true;
+        btn.textContent = 'Procurando sala...';
+
+        try {
+          const existing = await Network.checkRetainedState(code, 2200);
+          if (!existing) {
+            showToast('❌ Sala não encontrada! Confira o código.');
+            return;
+          }
+
+          btn.textContent = 'Entrando...';
+          const reqId = 'req_' + Math.random().toString(36).slice(2, 8);
+
+          const replyPromise = new Promise((resolve, reject) => {
+            const replyTopic = topicReply(code, session.playerId);
+            const timer = setTimeout(() => {
+              Network.unsubscribe(replyTopic);
+              reject(new Error('TIMEOUT'));
+            }, 5000);
+
+            Network.subscribe(replyTopic, (res) => {
+              if (res && res.reqId === reqId) {
+                clearTimeout(timer);
+                Network.unsubscribe(replyTopic);
+                resolve(res);
+              }
+            });
+          });
+
+          Network.publish(topicActions(code), {
+            type: 'JOIN',
+            reqId,
+            password: pass,
+            player: {
+              id: session.playerId,
+              nick: session.nick,
+              color: AVATAR_COLORS[0]
+            }
+          });
+
+          const reply = await replyPromise;
+          if (!reply.ok) {
+            if (reply.error === 'WRONG_PASSWORD') showToast('🔒 Senha incorreta!');
+            else if (reply.error === 'ROOM_FULL') showToast('⚠️ Esta sala já está cheia!');
+            else showToast('❌ Não foi possível entrar na sala.');
+            return;
+          }
+
+          session.roomCode = code;
+          session.lastSpinRoundRendered = 0;
+
+          // Se este jogador eventualmente virar Host no futuro, já fica pronto para ouvir ações
+          Network.subscribe(topicActions(code), handleHostIncomingAction);
+          Network.subscribe(topicState(code), (room) => {
+            if (!room || room.deleted) {
+              leaveLocalCleanup();
+              showToast('A sala foi encerrada.');
+              showScreen('screen-menu');
+              return;
+            }
+            session.roomState = room;
+            handleStateUpdate(room);
+          });
+
+          AudioFX.fanfare();
+          showToast(`Você entrou na sala #${code}!`);
+        } catch (err) {
+          if (err.message === 'TIMEOUT') {
+            showToast('⚠️ O criador da sala não respondeu. Verifique se a sala está aberta.');
+          } else {
+            showToast('❌ Erro ao conectar na sala.');
+          }
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Entrar na Sala 🚪';
+        }
+      });
+
+      function leaveLocalCleanup() {
+        if (session.roomCode) {
+          Network.unsubscribe(topicState(session.roomCode));
+          Network.unsubscribe(topicActions(session.roomCode));
+          Network.unsubscribe(topicReply(session.roomCode, session.playerId));
+        }
+        session.roomCode = null;
+        session.roomState = null;
+        session.lastSpinRoundRendered = 0;
+      }
+
+      function handleLeaveRoom() {
+        const code = session.roomCode;
+        const room = session.roomState;
+        if (code && room) {
+          if (room.hostId === session.playerId) {
+            // Host sai e transfere liderança ou apaga sala
+            room.players = room.players.filter(p => p.id !== session.playerId);
+            if (room.players.length === 0) {
+              Network.publish(topicState(code), { deleted: true }, true);
+            } else {
+              room.hostId = room.players[0].id;
+              publishRoomState(room);
+            }
+          } else {
+            Network.publish(topicActions(code), { type: 'LEAVE', playerId: session.playerId });
+          }
+        }
+        leaveLocalCleanup();
+        showScreen('screen-menu');
+      }
+
+      document.getElementById('leaveLobbyBtn').onclick = handleLeaveRoom;
+      document.getElementById('leaveGameBtn').onclick = handleLeaveRoom;
+
+      document.getElementById('copyCodeBtn').onclick = () => {
+        if (!session.roomCode) return;
+        navigator.clipboard?.writeText(session.roomCode).catch(() => {});
+        showToast(`Código ${session.roomCode} copiado!`);
+      };
+
+      document.getElementById('copyInviteBtn').onclick = () => {
+        if (!session.roomCode) return;
+        const base = window.location.href.split('?')[0];
+        const link = `${base}?room=${session.roomCode}`;
+        navigator.clipboard?.writeText(link).catch(() => {});
+        showToast('🔗 Link copiado! Envie para seus amigos.');
+      };
+
+      document.getElementById('startMatchBtn').onclick = () => {
+        const room = session.roomState;
+        if (!room || room.hostId !== session.playerId) return;
+        if (room.players.length < 2 && room.maxPlayers > 1) {
+          showToast('⚠️ Aguarde pelo menos 2 jogadores entrarem na sala!');
+          return;
+        }
+        triggerNewRoundOnHost(room);
+      };
+
+      // =========================================================================
+      // 7. RENDERIZAÇÃO EM TEMPO REAL
+      // =========================================================================
+      function handleStateUpdate(room) {
+        if (!room || !session.roomCode) return;
+        // Garante que ainda faz parte da sala
+        if (!room.players.some(p => p.id === session.playerId)) return;
+
+        if (room.status === 'lobby') {
+          showScreen('screen-lobby');
+          renderLobby(room);
+        } else if (room.status === 'playing') {
+          showScreen('screen-game');
+          renderGame(room);
+        }
+      }
+
+      function renderLobby(room) {
         const isHost = session.playerId === room.hostId;
+        const players = room.players || [];
 
         document.getElementById('lobbyCode').textContent = room.code;
         document.getElementById('lobbyLockIcon').textContent = room.password ? '🔒' : '🔓';
@@ -1608,7 +1566,7 @@
             <div class="player-avatar" style="background:${p.color};">${escapeHTML(p.nick.charAt(0).toUpperCase())}</div>
             <div class="player-meta">
               <div class="player-name">${escapeHTML(p.nick)} ${isMe ? '(Você)' : ''}</div>
-              <div class="player-tag">${p.id === room.hostId ? '👑 Criador da Sala' : '🟢 Conectado'}</div>
+              <div class="player-tag">${p.id === room.hostId ? '👑 Criador da Sala' : '🟢 Online'}</div>
             </div>
           `;
           listEl.appendChild(tile);
@@ -1620,7 +1578,7 @@
         if (isHost) {
           startBtn.style.display = 'inline-flex';
           statusText.innerHTML = players.length < 2 && room.maxPlayers > 1
-            ? 'Compartilhe o código ou o link de convite! Aguardando seus amigos entrarem<span class="pulse-dots"><span></span><span></span><span></span></span>'
+            ? 'Compartilhe o código acima! Aguardando seus amigos entrarem<span class="pulse-dots"><span></span><span></span><span></span></span>'
             : 'Tudo pronto! Clique em <strong>"Começar Partida"</strong> quando todos estiverem na sala.';
         } else {
           startBtn.style.display = 'none';
@@ -1629,12 +1587,13 @@
         }
       }
 
-      function renderGame(room, players) {
+      function renderGame(room) {
         const rd = room.roundData;
+        const players = room.players || [];
         if (!rd) return;
 
-        const asker = players.find(p => p.id === rd.askerId) || { nick: 'Desconectado' };
-        const responder = players.find(p => p.id === rd.responderId) || { nick: 'Desconectado' };
+        const asker = players.find(p => p.id === rd.askerId) || { nick: 'Saiu' };
+        const responder = players.find(p => p.id === rd.responderId) || { nick: 'Saiu' };
 
         document.getElementById('gameRoomCode').textContent = room.code;
         document.getElementById('gameRoundBadge').textContent = `RODADA #${rd.roundNum} • ♾️ INFINITA`;
@@ -1676,10 +1635,12 @@
           arena.appendChild(node);
         });
 
-        // Giro sincronizado da garrafa
+        // Animação da garrafa sincronizada
         const pivot = document.getElementById('bottlePivot');
         if (rd.phase === 'spinning' && session.lastSpinRoundRendered !== rd.roundNum) {
           session.lastSpinRoundRendered = rd.roundNum;
+          session.selectedType = null;
+          session.selectedDoor = null;
           AudioFX.spin();
           pivot.style.transition = 'none';
           pivot.style.transform = `rotate(${session.bottleAngle}deg)`;
@@ -1707,10 +1668,9 @@
         const isResponder = session.playerId === rd.responderId;
         const isHost = session.playerId === room.hostId;
 
-        // Evita re-renderizar formulário enquanto o usuário já está digitando no textarea!
-        const activeTag = document.activeElement?.id;
-        if ((rd.phase === 'asking' && isAsker && activeTag === 'questionInput') ||
-            (rd.phase === 'answering' && isResponder && activeTag === 'answerInput')) {
+        const activeId = document.activeElement?.id;
+        if ((rd.phase === 'asking' && isAsker && activeId === 'questionInput') ||
+            (rd.phase === 'answering' && isResponder && activeId === 'answerInput')) {
           return;
         }
 
@@ -1769,17 +1729,18 @@
               </div>
             `;
 
-            document.getElementById('btnChooseTruth').onclick = () => { session.selectedType = 'truth'; AudioFX.pop(); renderGame(room, players); };
-            document.getElementById('btnChooseDare').onclick = () => { session.selectedType = 'dare'; AudioFX.pop(); renderGame(room, players); };
-            document.getElementById('btnChooseOpen').onclick = () => { session.selectedDoor = 'open'; AudioFX.pop(); renderGame(room, players); };
-            document.getElementById('btnChooseClosed').onclick = () => { session.selectedDoor = 'closed'; AudioFX.pop(); renderGame(room, players); };
-            document.getElementById('confirmChoiceBtn').onclick = async () => {
+            document.getElementById('btnChooseTruth').onclick = () => { session.selectedType = 'truth'; AudioFX.pop(); renderGame(room); };
+            document.getElementById('btnChooseDare').onclick = () => { session.selectedType = 'dare'; AudioFX.pop(); renderGame(room); };
+            document.getElementById('btnChooseOpen').onclick = () => { session.selectedDoor = 'open'; AudioFX.pop(); renderGame(room); };
+            document.getElementById('btnChooseClosed').onclick = () => { session.selectedDoor = 'closed'; AudioFX.pop(); renderGame(room); };
+            document.getElementById('confirmChoiceBtn').onclick = () => {
               if (!session.selectedType || !session.selectedDoor) return;
               AudioFX.fanfare();
-              await RealtimeDB.updateRoomFields(room.code, {
-                'roundData/choiceType': session.selectedType,
-                'roundData/doorType': session.selectedDoor,
-                'roundData/phase': 'asking'
+              sendAction({
+                type: 'CHOOSE',
+                playerId: session.playerId,
+                choiceType: session.selectedType,
+                doorType: session.selectedDoor
               });
             };
           } else {
@@ -1838,13 +1799,14 @@
               };
             });
 
-            document.getElementById('sendQuestionBtn').onclick = async () => {
+            document.getElementById('sendQuestionBtn').onclick = () => {
               const txt = document.getElementById('questionInput').value.trim();
               if (!txt) { showToast('⚠️ Digite sua pergunta ou desafio!'); return; }
               AudioFX.fanfare();
-              await RealtimeDB.updateRoomFields(room.code, {
-                'roundData/questionText': txt,
-                'roundData/phase': 'answering'
+              sendAction({
+                type: 'ASK',
+                playerId: session.playerId,
+                questionText: txt
               });
             };
           } else {
@@ -1896,13 +1858,14 @@
               </div>
             `;
 
-            document.getElementById('submitAnswerBtn').onclick = async () => {
+            document.getElementById('submitAnswerBtn').onclick = () => {
               const ans = document.getElementById('answerInput').value.trim();
               if (!ans) { showToast('⚠️ Escreva sua resposta!'); return; }
               AudioFX.fanfare();
-              await RealtimeDB.updateRoomFields(room.code, {
-                'roundData/answerText': ans,
-                'roundData/phase': 'summary'
+              sendAction({
+                type: 'ANSWER',
+                playerId: session.playerId,
+                answerText: ans
               });
             };
           } else {
@@ -1981,20 +1944,20 @@
 
           const nextBtn = document.getElementById('nextRoundBtn');
           if (nextBtn) {
-            nextBtn.onclick = () => startNewRound(room);
+            nextBtn.onclick = () => sendAction({ type: 'NEXT_ROUND', playerId: session.playerId });
           }
         }
       }
 
-      // Remove jogador ao fechar aba (no modo local ou fallback antes do onDisconnect)
+      // Sai da sala se fechar a aba
       window.addEventListener('beforeunload', () => {
-        if (session.roomCode && RealtimeDB.mode === 'local') {
-          RealtimeDB.leaveRoom(session.roomCode, session.playerId);
+        if (session.roomCode) {
+          handleLeaveRoom();
         }
       });
 
-      // Inicializa conexão ao carregar
-      RealtimeDB.init();
+      // Conecta automaticamente ao abrir a página!
+      Network.connect();
     })();
   </script>
 </body>
